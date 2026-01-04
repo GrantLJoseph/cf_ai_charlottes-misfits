@@ -64,3 +64,11 @@ The cards are now blank when face up. It seems like maybe the card decorations a
 
 # 12
 That worked. Now cards drawn by the player are left face down in their hand though.
+
+# 13
+Make the deck and stack physically visible in the center of the game screen. The deck should be on the right, symbolized by a face-down card with the size of the deck displayed beneath it. The stack should be to the left, showing the card currently on top with its total size beneath it as well.
+
+There should be a white rectangle the size of a card shown where the deck/stack should be when they're empty as an additional indicator in addition to the size being listed as zero.
+
+# 14
+Neither the bottom right suit nor rank are correctly positioned. The rank is too far to the right and probably also too far down. The suit is both, being positioned off the bottom right corner of the card.

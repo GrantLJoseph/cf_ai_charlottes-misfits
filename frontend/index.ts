@@ -75,6 +75,8 @@ class CardGame {
 	private deckText: Text;
 	private stackText: Text;
 	private playButton: Container;
+	private deckContainer: Container;
+	private stackContainer: Container;
 
 	constructor() {
 		this.app = new Application();
@@ -83,6 +85,8 @@ class CardGame {
 		this.deckText = new Text();
 		this.stackText = new Text();
 		this.playButton = new Container();
+		this.deckContainer = new Container();
+		this.stackContainer = new Container();
 	}
 
 	async init(): Promise<void> {
@@ -97,6 +101,8 @@ class CardGame {
 		container.appendChild(this.app.canvas);
 
 		this.app.stage.addChild(this.handContainer);
+		this.app.stage.addChild(this.deckContainer);
+		this.app.stage.addChild(this.stackContainer);
 
 		// Create UI elements
 		this.createStatusText();
@@ -136,22 +142,28 @@ class CardGame {
 			style: new TextStyle({
 				fontFamily: 'Arial, sans-serif',
 				fontSize: 20,
-				fill: '#ffffff'
+				fill: '#ffffff',
+				align: 'center'
 			})
 		});
-		this.app.stage.addChild(this.deckText);
+		this.deckText.anchor.set(0.5, 0);
+		this.deckContainer.addChild(this.deckText);
 	}
 
 	private createStackDisplay(): void {
 		this.stackText = new Text({
-			text: 'Stack: Empty',
+			text: 'Stack: 0',
 			style: new TextStyle({
 				fontFamily: 'Arial, sans-serif',
 				fontSize: 20,
-				fill: '#ffffff'
+				fill: '#ffffff',
+				align: 'center'
 			})
 		});
-		this.app.stage.addChild(this.stackText);
+		this.stackText.anchor.set(0.5, 0);
+		this.stackContainer.addChild(this.stackText);
+
+		this.updateStackDisplay();
 	}
 
 	private createPlayButton(): void {
@@ -189,14 +201,16 @@ class CardGame {
 		this.statusText.x = screenWidth / 2;
 		this.statusText.y = 20;
 
-		this.deckText.x = 20;
-		this.deckText.y = screenHeight / 2 - 100;
+		// Position deck on the right side of center
+		this.deckContainer.x = screenWidth / 2 + 80;
+		this.deckContainer.y = screenHeight / 2 - CARD_HEIGHT / 2;
 
-		this.stackText.x = 20;
-		this.stackText.y = screenHeight / 2;
+		// Position stack on the left side of center
+		this.stackContainer.x = screenWidth / 2 - CARD_WIDTH - 80;
+		this.stackContainer.y = screenHeight / 2 - CARD_HEIGHT / 2;
 
 		this.playButton.x = screenWidth / 2 - 100;
-		this.playButton.y = screenHeight / 2 - 150;
+		this.playButton.y = screenHeight / 2 - 200;
 	}
 
 	private initializeDeck(): void {
@@ -316,17 +330,17 @@ class CardGame {
 
 			// Bottom-right rank
 			const bottomRank = new Text({ text: rankStr, style: textStyle });
-			bottomRank.anchor.set(1, 1);
+			bottomRank.anchor.set(0, 0);
 			bottomRank.x = CARD_WIDTH - 10;
-			bottomRank.y = CARD_HEIGHT - 8;
+			bottomRank.y = CARD_HEIGHT - 36;
 			bottomRank.rotation = Math.PI;
 			container.addChild(bottomRank);
 
 			// Bottom-right suit
 			const bottomSuit = new Text({ text: suitSymbol, style: smallSuitStyle });
-			bottomSuit.anchor.set(1, 1);
+			bottomSuit.anchor.set(0, 0);
 			bottomSuit.x = CARD_WIDTH - 12;
-			bottomSuit.y = CARD_HEIGHT - 36;
+			bottomSuit.y = CARD_HEIGHT - 8;
 			bottomSuit.rotation = Math.PI;
 			container.addChild(bottomSuit);
 		}
@@ -690,16 +704,56 @@ class CardGame {
 	}
 
 	private updateDeckDisplay(): void {
-		this.deckText.text = `Deck: ${this.deck.length}`;
+		// Remove all children except the text
+		while (this.deckContainer.children.length > 1) {
+			this.deckContainer.removeChildAt(0);
+		}
+
+		if (this.deck.length === 0) {
+			// Show empty placeholder
+			const placeholder = new Graphics();
+			placeholder.roundRect(0, 0, CARD_WIDTH, CARD_HEIGHT, CARD_RADIUS);
+			placeholder.stroke({ color: 0xffffff, width: 2 });
+			this.deckContainer.addChildAt(placeholder, 0);
+
+			this.deckText.text = '0';
+		} else {
+			// Show face-down card
+			const deckCard = this.createCardContainer('hearts', 2, true);
+			this.deckContainer.addChildAt(deckCard, 0);
+
+			this.deckText.text = `${this.deck.length}`;
+		}
+
+		// Position text below card
+		this.deckText.y = CARD_HEIGHT + 10;
 	}
 
 	private updateStackDisplay(): void {
-		if (this.stack.length === 0) {
-			this.stackText.text = 'Stack: Empty';
-		} else {
-			const topCard = this.stack[this.stack.length - 1];
-			this.stackText.text = `Stack: ${rankToString(topCard.rank)}${SUIT_SYMBOLS[topCard.suit]} (${this.stack.length})`;
+		// Remove all children except the text
+		while (this.stackContainer.children.length > 1) {
+			this.stackContainer.removeChildAt(0);
 		}
+
+		if (this.stack.length === 0) {
+			// Show empty placeholder
+			const placeholder = new Graphics();
+			placeholder.roundRect(0, 0, CARD_WIDTH, CARD_HEIGHT, CARD_RADIUS);
+			placeholder.stroke({ color: 0xffffff, width: 2 });
+			this.stackContainer.addChildAt(placeholder, 0);
+
+			this.stackText.text = '0';
+		} else {
+			// Show top card of stack
+			const topCard = this.stack[this.stack.length - 1];
+			const stackCard = this.createCardContainer(topCard.suit, topCard.rank, false);
+			this.stackContainer.addChildAt(stackCard, 0);
+
+			this.stackText.text = `${this.stack.length}`;
+		}
+
+		// Position text below card
+		this.stackText.y = CARD_HEIGHT + 10;
 	}
 
 	private flipCardFaceUp(card: Card): void {
