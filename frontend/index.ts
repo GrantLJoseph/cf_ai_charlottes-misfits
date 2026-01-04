@@ -100,7 +100,7 @@ class CardGame {
 		if (!container) throw Error('Cannot get game container');
 		container.appendChild(this.app.canvas);
 
-		this.app.stage.addChild(this.handContainer);
+		// Don't use handContainer anymore - add all cards directly to stage
 		this.app.stage.addChild(this.deckContainer);
 		this.app.stage.addChild(this.stackContainer);
 
@@ -112,12 +112,19 @@ class CardGame {
 
 		// Initialize game
 		this.initializeDeck();
+		this.positionUI();
+
+		// Position all deck cards at deck location
+		this.positionDeckCards();
+
 		this.dealInitialCards();
 
 		window.addEventListener('resize', () => {
 			this.animatingCards.clear();
-			this.positionCardsImmediate();
 			this.positionUI();
+			this.positionDeckCards();
+			this.positionStackCards();
+			this.positionCardsImmediate();
 		});
 	}
 
@@ -218,8 +225,10 @@ class CardGame {
 
 		for (const suit of suits) {
 			for (let rank = 2; rank <= 14; rank++) {
-				const card = this.createCardData(suit, rank, true); // Start face down
+				const card = this.createCardData(suit, rank, true);
 				this.deck.push(card);
+				// Add all cards directly to stage
+				this.app.stage.addChild(card.container);
 			}
 		}
 
@@ -363,14 +372,7 @@ class CardGame {
 	}
 
 	private displayPlayerHand(): void {
-		// Remove all cards from hand container
-		this.handContainer.removeChildren();
-
-		// Add player's hand cards
-		this.playerHand.forEach(card => {
-			this.handContainer.addChild(card.container);
-		});
-
+		// Cards are already on stage, just position them
 		this.positionCards();
 	}
 
@@ -517,8 +519,12 @@ class CardGame {
 
 		if (!placement || !this.canPlayOnStack(placement)) return;
 
-		// Add cards to stack
-		this.stack.push(...placement.cards);
+		// Add cards to stack and animate them to stack position
+		placement.cards.forEach(card => {
+			this.stack.push(card);
+			this.animateCard(card.container, this.stackContainer.x, this.stackContainer.y);
+			this.flipCardFaceUp(card);
+		});
 		this.playerHand = this.playerHand.filter(c => !c.selected);
 
 		this.drawToMinimum(this.playerHand);
@@ -536,7 +542,7 @@ class CardGame {
 
 			// Computer's turn
 			this.gamePhase = 'computer-turn';
-			this.computerTurn();
+			setTimeout(() => this.computerTurn(), 1000);
 		}
 
 		this.playButton.visible = false;
@@ -704,78 +710,74 @@ class CardGame {
 	}
 
 	private updateDeckDisplay(): void {
-		// Remove all children except the text
-		while (this.deckContainer.children.length > 1) {
-			this.deckContainer.removeChildAt(0);
-		}
+		// Clean up placeholder if it exists
+		this.deckContainer.removeChildren();
+		this.deckContainer.addChild(this.deckText);
 
 		if (this.deck.length === 0) {
-			// Show empty placeholder
 			const placeholder = new Graphics();
 			placeholder.roundRect(0, 0, CARD_WIDTH, CARD_HEIGHT, CARD_RADIUS);
-			placeholder.stroke({ color: 0xffffff, width: 2 });
+			placeholder.stroke({ color: 0xffffff, width: 2, alpha: 0.5 });
 			this.deckContainer.addChildAt(placeholder, 0);
-
-			this.deckText.text = '0';
-		} else {
-			// Show face-down card
-			const deckCard = this.createCardContainer('hearts', 2, true);
-			this.deckContainer.addChildAt(deckCard, 0);
-
-			this.deckText.text = `${this.deck.length}`;
 		}
 
-		// Position text below card
+		this.deckText.text = `${this.deck.length}`;
 		this.deckText.y = CARD_HEIGHT + 10;
+		this.deckText.x = CARD_WIDTH / 2;
 	}
 
 	private updateStackDisplay(): void {
-		// Remove all children except the text
-		while (this.stackContainer.children.length > 1) {
-			this.stackContainer.removeChildAt(0);
-		}
+		this.stackContainer.removeChildren();
+		this.stackContainer.addChild(this.stackText);
 
 		if (this.stack.length === 0) {
-			// Show empty placeholder
 			const placeholder = new Graphics();
 			placeholder.roundRect(0, 0, CARD_WIDTH, CARD_HEIGHT, CARD_RADIUS);
-			placeholder.stroke({ color: 0xffffff, width: 2 });
+			placeholder.stroke({ color: 0xffffff, width: 2, alpha: 0.5 });
 			this.stackContainer.addChildAt(placeholder, 0);
-
-			this.stackText.text = '0';
-		} else {
-			// Show top card of stack
-			const topCard = this.stack[this.stack.length - 1];
-			const stackCard = this.createCardContainer(topCard.suit, topCard.rank, false);
-			this.stackContainer.addChildAt(stackCard, 0);
-
-			this.stackText.text = `${this.stack.length}`;
 		}
 
-		// Position text below card
+		this.stackText.text = `${this.stack.length}`;
 		this.stackText.y = CARD_HEIGHT + 10;
+		this.stackText.x = CARD_WIDTH / 2;
 	}
 
 	private flipCardFaceUp(card: Card): void {
+		const oldX = card.container.x;
+		const oldY = card.container.y;
+
+		// Remove old container
+		this.app.stage.removeChild(card.container);
+
 		// Create new face-up container
-		const newContainer = this.createCardContainer(card.suit, card.rank, false);
-		newContainer.on('pointerdown', () => this.handleCardClick(card));
-		newContainer.on('pointerover', () => this.handleCardHover(card, true));
-		newContainer.on('pointerout', () => this.handleCardHover(card, false));
+		card.container = this.createCardContainer(card.suit, card.rank, false);
+		card.container.x = oldX;
+		card.container.y = oldY;
+		card.container.on('pointerdown', () => this.handleCardClick(card));
+		card.container.on('pointerover', () => this.handleCardHover(card, true));
+		card.container.on('pointerout', () => this.handleCardHover(card, false));
 
-		// Copy position from old container
-		newContainer.x = card.container.x;
-		newContainer.y = card.container.y;
+		// Add back to stage
+		this.app.stage.addChild(card.container);
+	}
 
-		// Replace in hand container if it's there
-		if (this.handContainer.children.includes(card.container)) {
-			const index = this.handContainer.getChildIndex(card.container);
-			this.handContainer.removeChild(card.container);
-			this.handContainer.addChildAt(newContainer, index);
-		}
+	private flipCardFaceDown(card: Card): void {
+		const oldX = card.container.x;
+		const oldY = card.container.y;
 
-		// Update card reference
-		card.container = newContainer;
+		// Remove old container
+		this.app.stage.removeChild(card.container);
+
+		// Create new face-down container
+		card.container = this.createCardContainer(card.suit, card.rank, true);
+		card.container.x = oldX;
+		card.container.y = oldY;
+		card.container.on('pointerdown', () => this.handleCardClick(card));
+		card.container.on('pointerover', () => this.handleCardHover(card, true));
+		card.container.on('pointerout', () => this.handleCardHover(card, false));
+
+		// Add back to stage
+		this.app.stage.addChild(card.container);
 	}
 
 	private sortHand(hand: Card[]): void {
@@ -857,6 +859,22 @@ class CardGame {
 
 		const animationId = requestAnimationFrame(animate);
 		this.animatingCards.set(container, animationId);
+	}
+
+	private positionDeckCards(): void {
+		// Position all cards in the deck at the deck location
+		this.deck.forEach(card => {
+			card.container.x = this.deckContainer.x;
+			card.container.y = this.deckContainer.y;
+		});
+	}
+
+	private positionStackCards(): void {
+		// Position all cards in the stack at the stack location
+		this.stack.forEach(card => {
+			card.container.x = this.stackContainer.x;
+			card.container.y = this.stackContainer.y;
+		});
 	}
 }
 
