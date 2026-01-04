@@ -60,10 +60,10 @@ class CardGame {
 		this.createCards();
 
 		// Position cards initially
-		this.positionCards();
+		this.positionCards(true);
 
 		// Handle window resize
-		window.addEventListener('resize', () => this.positionCards());
+		window.addEventListener('resize', () => this.positionCards(true));
 	}
 
 	private createCards(): void {
@@ -189,7 +189,7 @@ class CardGame {
 		this.positionCards();
 	}
 
-	private positionCards(): void {
+	private positionCards(instant: Boolean = false): void {
 		const screenWidth = this.app.screen.width;
 		const screenHeight = this.app.screen.height;
 
@@ -208,8 +208,12 @@ class CardGame {
 			if (card.selected) targetY -= SELECTED_RISE;
 			else if (card.hovered) targetY -= HOVER_RISE;
 
-			// Animate to position
-			this.animateCard(card.container, targetX, targetY);
+			if (instant) {
+				card.container.x = targetX;
+				card.container.y = targetY;
+			} else {
+				this.animateCard(card.container, targetX, targetY);
+			}
 		});
 	}
 
