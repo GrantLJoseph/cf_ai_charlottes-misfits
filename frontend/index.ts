@@ -1,4 +1,3 @@
-
 import { Application, Container, Graphics, Text, TextStyle, FederatedPointerEvent } from 'pixi.js';
 
 // Card data structures
@@ -205,7 +204,7 @@ class CardGame {
 
 		for (const suit of suits) {
 			for (let rank = 2; rank <= 14; rank++) {
-				const card = this.createCardData(suit, rank);
+				const card = this.createCardData(suit, rank, true); // Start face down
 				this.deck.push(card);
 			}
 		}
@@ -219,8 +218,8 @@ class CardGame {
 		this.updateDeckDisplay();
 	}
 
-	private createCardData(suit: 'hearts' | 'diamonds' | 'clubs' | 'spades', rank: number): Card {
-		const container = this.createCardContainer(suit, rank);
+	private createCardData(suit: 'hearts' | 'diamonds' | 'clubs' | 'spades', rank: number, faceDown = false): Card {
+		const container = this.createCardContainer(suit, rank, faceDown);
 		const card: Card = {
 			suit,
 			rank,
@@ -237,7 +236,7 @@ class CardGame {
 		return card;
 	}
 
-	private createCardContainer(suit: 'hearts' | 'diamonds' | 'clubs' | 'spades', rank: number): Container {
+	private createCardContainer(suit: 'hearts' | 'diamonds' | 'clubs' | 'spades', rank: number, faceDown = false): Container {
 		const container = new Container();
 		container.eventMode = 'static';
 		container.cursor = 'pointer';
@@ -248,67 +247,89 @@ class CardGame {
 		shadow.fill({ color: 0x000000, alpha: 0.2 });
 		container.addChild(shadow);
 
-		// Card background
+		// Card background - ADD THIS FIRST
 		const background = new Graphics();
 		background.roundRect(0, 0, CARD_WIDTH, CARD_HEIGHT, CARD_RADIUS);
-		background.fill({ color: 0xffffff });
-		background.stroke({ color: 0xcccccc, width: 2 });
-		container.addChild(background);
 
-		const color = SUIT_COLORS[suit];
-		const suitSymbol = SUIT_SYMBOLS[suit];
-		const rankStr = rankToString(rank);
+		if (faceDown) {
+			// Face down - blue pattern
+			background.fill({ color: 0x1e3a8a });
+			background.stroke({ color: 0x1e40af, width: 2 });
+			container.addChild(background);
 
-		// Top-left rank
-		const textStyle = new TextStyle({
-			fontFamily: 'Arial, sans-serif',
-			fontSize: 28,
-			fontWeight: 'bold',
-			fill: color,
-		});
-		const topRank = new Text({ text: rankStr, style: textStyle });
-		topRank.x = 10;
-		topRank.y = 8;
-		container.addChild(topRank);
+			// Add decorative pattern on top
+			const pattern = new Graphics();
+			pattern.rect(10, 10, CARD_WIDTH - 20, CARD_HEIGHT - 20);
+			pattern.stroke({ color: 0x3b82f6, width: 2 });
 
-		// Top-left suit
-		const smallSuitStyle = new TextStyle({
-			fontFamily: 'Arial, sans-serif',
-			fontSize: 20,
-			fill: color,
-		});
-		const topSuit = new Text({ text: suitSymbol, style: smallSuitStyle });
-		topSuit.x = 12;
-		topSuit.y = 36;
-		container.addChild(topSuit);
+			pattern.moveTo(CARD_WIDTH / 2, 10);
+			pattern.lineTo(CARD_WIDTH / 2, CARD_HEIGHT - 10);
+			pattern.moveTo(10, CARD_HEIGHT / 2);
+			pattern.lineTo(CARD_WIDTH - 10, CARD_HEIGHT / 2);
+			pattern.stroke({ color: 0x3b82f6, width: 2 });
 
-		// Center suit
-		const centerSuitStyle = new TextStyle({
-			fontFamily: 'Arial, sans-serif',
-			fontSize: 56,
-			fill: color,
-		});
-		const centerSuit = new Text({ text: suitSymbol, style: centerSuitStyle });
-		centerSuit.anchor.set(0.5);
-		centerSuit.x = CARD_WIDTH / 2;
-		centerSuit.y = CARD_HEIGHT / 2;
-		container.addChild(centerSuit);
+			container.addChild(pattern);
+		} else {
+			// Face up - show card details
+			background.fill({ color: 0xffffff });
+			background.stroke({ color: 0xcccccc, width: 2 });
+			container.addChild(background);
 
-		// Bottom-right rank
-		const bottomRank = new Text({ text: rankStr, style: textStyle });
-		bottomRank.anchor.set(1, 1);
-		bottomRank.x = CARD_WIDTH - 10;
-		bottomRank.y = CARD_HEIGHT - 8;
-		bottomRank.rotation = Math.PI;
-		container.addChild(bottomRank);
+			const color = SUIT_COLORS[suit];
+			const suitSymbol = SUIT_SYMBOLS[suit];
+			const rankStr = rankToString(rank);
 
-		// Bottom-right suit
-		const bottomSuit = new Text({ text: suitSymbol, style: smallSuitStyle });
-		bottomSuit.anchor.set(1, 1);
-		bottomSuit.x = CARD_WIDTH - 12;
-		bottomSuit.y = CARD_HEIGHT - 36;
-		bottomSuit.rotation = Math.PI;
-		container.addChild(bottomSuit);
+			// Top-left rank
+			const textStyle = new TextStyle({
+				fontFamily: 'Arial, sans-serif',
+				fontSize: 28,
+				fontWeight: 'bold',
+				fill: color,
+			});
+			const topRank = new Text({ text: rankStr, style: textStyle });
+			topRank.x = 10;
+			topRank.y = 8;
+			container.addChild(topRank);
+
+			// Top-left suit
+			const smallSuitStyle = new TextStyle({
+				fontFamily: 'Arial, sans-serif',
+				fontSize: 20,
+				fill: color,
+			});
+			const topSuit = new Text({ text: suitSymbol, style: smallSuitStyle });
+			topSuit.x = 12;
+			topSuit.y = 36;
+			container.addChild(topSuit);
+
+			// Center suit
+			const centerSuitStyle = new TextStyle({
+				fontFamily: 'Arial, sans-serif',
+				fontSize: 56,
+				fill: color,
+			});
+			const centerSuit = new Text({ text: suitSymbol, style: centerSuitStyle });
+			centerSuit.anchor.set(0.5);
+			centerSuit.x = CARD_WIDTH / 2;
+			centerSuit.y = CARD_HEIGHT / 2;
+			container.addChild(centerSuit);
+
+			// Bottom-right rank
+			const bottomRank = new Text({ text: rankStr, style: textStyle });
+			bottomRank.anchor.set(1, 1);
+			bottomRank.x = CARD_WIDTH - 10;
+			bottomRank.y = CARD_HEIGHT - 8;
+			bottomRank.rotation = Math.PI;
+			container.addChild(bottomRank);
+
+			// Bottom-right suit
+			const bottomSuit = new Text({ text: suitSymbol, style: smallSuitStyle });
+			bottomSuit.anchor.set(1, 1);
+			bottomSuit.x = CARD_WIDTH - 12;
+			bottomSuit.y = CARD_HEIGHT - 36;
+			bottomSuit.rotation = Math.PI;
+			container.addChild(bottomSuit);
+		}
 
 		return container;
 	}
@@ -319,6 +340,9 @@ class CardGame {
 			this.playerHand.push(this.deck.pop()!);
 			this.computerHand.push(this.deck.pop()!);
 		}
+
+		// Sort for display
+		this.sortHand(this.playerHand);
 
 		this.displayPlayerHand();
 		this.updateDeckDisplay();
@@ -426,9 +450,12 @@ class CardGame {
 		const selected = this.playerHand.filter(c => c.selected);
 		if (selected.length !== 3) return;
 
-		// Move selected cards to hidden reserve
+		// Move selected cards to hidden reserve (keep them face down)
 		this.playerHiddenReserve = selected;
 		this.playerHand = this.playerHand.filter(c => !c.selected);
+
+		// Flip remaining cards face up so player can see them
+		this.playerHand.forEach(card => this.flipCardFaceUp(card));
 
 		// Computer does the same (random selection)
 		for (let i = 0; i < 3; i++) {
@@ -627,8 +654,17 @@ class CardGame {
 
 	private drawToMinimum(hand: Card[]): void {
 		while (hand.length < 3 && this.deck.length > 0) {
-			hand.push(this.deck.pop()!);
+			const card = this.deck.pop()!;
+
+			// If this is the player's hand, flip the card face up
+			if (hand === this.playerHand) {
+				this.flipCardFaceUp(card);
+			}
+
+			hand.push(card);
 		}
+
+		this.sortHand(hand);
 	}
 
 	private checkWinCondition(): boolean {
@@ -664,6 +700,35 @@ class CardGame {
 			const topCard = this.stack[this.stack.length - 1];
 			this.stackText.text = `Stack: ${rankToString(topCard.rank)}${SUIT_SYMBOLS[topCard.suit]} (${this.stack.length})`;
 		}
+	}
+
+	private flipCardFaceUp(card: Card): void {
+		// Create new face-up container
+		const newContainer = this.createCardContainer(card.suit, card.rank, false);
+		newContainer.on('pointerdown', () => this.handleCardClick(card));
+		newContainer.on('pointerover', () => this.handleCardHover(card, true));
+		newContainer.on('pointerout', () => this.handleCardHover(card, false));
+
+		// Copy position from old container
+		newContainer.x = card.container.x;
+		newContainer.y = card.container.y;
+
+		// Replace in hand container if it's there
+		if (this.handContainer.children.includes(card.container)) {
+			const index = this.handContainer.getChildIndex(card.container);
+			this.handContainer.removeChild(card.container);
+			this.handContainer.addChildAt(newContainer, index);
+		}
+
+		// Update card reference
+		card.container = newContainer;
+	}
+
+	private sortHand(hand: Card[]): void {
+		hand.sort((a, b) => {
+			if (a.rank === b.rank) return a.suit.localeCompare(b.suit);
+			return a.rank - b.rank;
+		});
 	}
 
 	private positionCards(): void {
