@@ -1,83 +1,252 @@
-// my-first-worker/frontend/game.ts
+
 import { Application, Container, Graphics, Text, TextStyle, FederatedPointerEvent } from 'pixi.js';
 
-// Card data
+// Card data structures
 interface Card {
-	id: number;
-	suit: string;
-	rank: string;
-	color: string;
+	suit: 'hearts' | 'diamonds' | 'clubs' | 'spades';
+	rank: number; // 2-14 (11=Jack, 12=Queen, 13=King, 14=Ace)
+	id: string;
+	container: Container;
 	selected: boolean;
 	hovered: boolean;
-	container: Container;
 }
+
+interface Placement {
+	cards: Card[];
+	type: 'single' | 'multiple' | 'straight';
+}
+
+type GamePhase =
+	| 'selecting-hidden-reserve'
+	| 'selecting-visible-reserve'
+	| 'player-turn'
+	| 'computer-turn'
+	| 'game-over';
 
 // Card configuration
 const CARD_WIDTH = 120;
 const CARD_HEIGHT = 168;
 const CARD_RADIUS = 12;
 const CARD_SPACING = 140;
-const UNSELECTED_VISIBLE = 0.5; // How much of unselected card is visible
-const SELECTED_RISE = 80; // How much selected card rises
+const UNSELECTED_VISIBLE = 0.5;
+const SELECTED_RISE = 80;
 const HOVER_RISE = 10;
 
-// Sample cards
-const CARD_DATA = [
-	{ suit: '♥', rank: 'A', color: '#dc2626' },
-	{ suit: '♠', rank: 'K', color: '#1f2937' },
-	{ suit: '♦', rank: 'Q', color: '#dc2626' },
-	{ suit: '♣', rank: 'J', color: '#1f2937' },
-	{ suit: '♥', rank: '10', color: '#dc2626' },
-];
+const SUIT_SYMBOLS = {
+	hearts: '♥',
+	diamonds: '♦',
+	clubs: '♣',
+	spades: '♠'
+};
+
+const SUIT_COLORS = {
+	hearts: '#dc2626',
+	diamonds: '#dc2626',
+	clubs: '#1f2937',
+	spades: '#1f2937'
+};
+
+function rankToString(rank: number): string {
+	if (rank === 14) return 'A';
+	if (rank === 13) return 'K';
+	if (rank === 12) return 'Q';
+	if (rank === 11) return 'J';
+	return rank.toString();
+}
 
 class CardGame {
 	private app: Application;
 	private cards: Card[] = [];
 	private handContainer: Container;
+	private animatingCards: Map<Container, number> = new Map();
+
+	// Game state
+	private deck: Card[] = [];
+	private stack: Card[] = [];
+	private playerHand: Card[] = [];
+	private playerHiddenReserve: Card[] = [];
+	private playerVisibleReserve: Placement[] = [];
+	private computerHand: Card[] = [];
+	private computerHiddenReserve: Card[] = [];
+	private computerVisibleReserve: Placement[] = [];
+	private discardPile: Card[] = [];
+
+	private gamePhase: GamePhase = 'selecting-hidden-reserve';
+	private statusText: Text;
+	private deckText: Text;
+	private stackText: Text;
+	private playButton: Container;
 
 	constructor() {
 		this.app = new Application();
 		this.handContainer = new Container();
+		this.statusText = new Text();
+		this.deckText = new Text();
+		this.stackText = new Text();
+		this.playButton = new Container();
 	}
 
 	async init(): Promise<void> {
-		// Initialize PixiJS
 		await this.app.init({
 			background: '#1a472a',
 			resizeTo: window,
 			antialias: true,
 		});
 
-		// Add canvas to DOM
 		const container = document.getElementById('game-container');
 		if (!container) throw Error('Cannot get game container');
 		container.appendChild(this.app.canvas);
 
-		// Set up the hand container
 		this.app.stage.addChild(this.handContainer);
 
-		// Create cards
-		this.createCards();
+		// Create UI elements
+		this.createStatusText();
+		this.createDeckDisplay();
+		this.createStackDisplay();
+		this.createPlayButton();
 
-		// Position cards initially
-		this.positionCards(true);
+		// Initialize game
+		this.initializeDeck();
+		this.dealInitialCards();
 
-		// Handle window resize
-		window.addEventListener('resize', () => this.positionCards(true));
-	}
-
-	private createCards(): void {
-		CARD_DATA.forEach((data, index) => {
-			const card = this.createCard(index, data.suit, data.rank, data.color);
-			this.cards.push(card);
-			this.handContainer.addChild(card.container);
+		window.addEventListener('resize', () => {
+			this.animatingCards.clear();
+			this.positionCardsImmediate();
+			this.positionUI();
 		});
 	}
 
-	private createCard(id: number, suit: string, rank: string, color: string): Card {
+	private createStatusText(): void {
+		this.statusText = new Text({
+			text: 'Select 3 cards for your hidden reserve (0/3)',
+			style: new TextStyle({
+				fontFamily: 'Arial, sans-serif',
+				fontSize: 24,
+				fill: '#ffffff',
+				align: 'center'
+			})
+		});
+		this.statusText.anchor.set(0.5, 0);
+		this.app.stage.addChild(this.statusText);
+		this.positionUI();
+	}
+
+	private createDeckDisplay(): void {
+		this.deckText = new Text({
+			text: 'Deck: 0',
+			style: new TextStyle({
+				fontFamily: 'Arial, sans-serif',
+				fontSize: 20,
+				fill: '#ffffff'
+			})
+		});
+		this.app.stage.addChild(this.deckText);
+	}
+
+	private createStackDisplay(): void {
+		this.stackText = new Text({
+			text: 'Stack: Empty',
+			style: new TextStyle({
+				fontFamily: 'Arial, sans-serif',
+				fontSize: 20,
+				fill: '#ffffff'
+			})
+		});
+		this.app.stage.addChild(this.stackText);
+	}
+
+	private createPlayButton(): void {
+		const bg = new Graphics();
+		bg.roundRect(0, 0, 200, 50, 8);
+		bg.fill({ color: 0x3b82f6 });
+		this.playButton.addChild(bg);
+
+		const text = new Text({
+			text: 'Play Cards',
+			style: new TextStyle({
+				fontFamily: 'Arial, sans-serif',
+				fontSize: 20,
+				fill: '#ffffff'
+			})
+		});
+		text.anchor.set(0.5);
+		text.x = 100;
+		text.y = 25;
+		this.playButton.addChild(text);
+
+		this.playButton.eventMode = 'static';
+		this.playButton.cursor = 'pointer';
+		this.playButton.visible = false;
+
+		this.playButton.on('pointerdown', () => this.handlePlayButton());
+
+		this.app.stage.addChild(this.playButton);
+	}
+
+	private positionUI(): void {
+		const screenWidth = this.app.screen.width;
+		const screenHeight = this.app.screen.height;
+
+		this.statusText.x = screenWidth / 2;
+		this.statusText.y = 20;
+
+		this.deckText.x = 20;
+		this.deckText.y = screenHeight / 2 - 100;
+
+		this.stackText.x = 20;
+		this.stackText.y = screenHeight / 2;
+
+		this.playButton.x = screenWidth / 2 - 100;
+		this.playButton.y = screenHeight / 2 - 150;
+	}
+
+	private initializeDeck(): void {
+		const suits: Array<'hearts' | 'diamonds' | 'clubs' | 'spades'> = ['hearts', 'diamonds', 'clubs', 'spades'];
+
+		for (const suit of suits) {
+			for (let rank = 2; rank <= 14; rank++) {
+				const card = this.createCardData(suit, rank);
+				this.deck.push(card);
+			}
+		}
+
+		// Shuffle deck
+		for (let i = this.deck.length - 1; i > 0; i--) {
+			const j = Math.floor(Math.random() * (i + 1));
+			[this.deck[i], this.deck[j]] = [this.deck[j], this.deck[i]];
+		}
+
+		this.updateDeckDisplay();
+	}
+
+	private createCardData(suit: 'hearts' | 'diamonds' | 'clubs' | 'spades', rank: number): Card {
+		const container = this.createCardContainer(suit, rank);
+		const card: Card = {
+			suit,
+			rank,
+			id: `${suit}-${rank}-${Math.random()}`,
+			container,
+			selected: false,
+			hovered: false
+		};
+
+		container.on('pointerdown', () => this.handleCardClick(card));
+		container.on('pointerover', () => this.handleCardHover(card, true));
+		container.on('pointerout', () => this.handleCardHover(card, false));
+
+		return card;
+	}
+
+	private createCardContainer(suit: 'hearts' | 'diamonds' | 'clubs' | 'spades', rank: number): Container {
 		const container = new Container();
 		container.eventMode = 'static';
 		container.cursor = 'pointer';
+
+		// Card shadow
+		const shadow = new Graphics();
+		shadow.roundRect(4, 4, CARD_WIDTH, CARD_HEIGHT, CARD_RADIUS);
+		shadow.fill({ color: 0x000000, alpha: 0.2 });
+		container.addChild(shadow);
 
 		// Card background
 		const background = new Graphics();
@@ -86,159 +255,489 @@ class CardGame {
 		background.stroke({ color: 0xcccccc, width: 2 });
 		container.addChild(background);
 
-		// Card shadow (drawn behind)
-		const shadow = new Graphics();
-		shadow.roundRect(4, 4, CARD_WIDTH, CARD_HEIGHT, CARD_RADIUS);
-		shadow.fill({ color: 0x000000, alpha: 0.2 });
-		container.addChildAt(shadow, 0);
+		const color = SUIT_COLORS[suit];
+		const suitSymbol = SUIT_SYMBOLS[suit];
+		const rankStr = rankToString(rank);
 
-		// Rank and suit style
+		// Top-left rank
 		const textStyle = new TextStyle({
 			fontFamily: 'Arial, sans-serif',
 			fontSize: 28,
 			fontWeight: 'bold',
 			fill: color,
 		});
-
-		// Top-left rank
-		const topRank = new Text({ text: rank, style: textStyle });
+		const topRank = new Text({ text: rankStr, style: textStyle });
 		topRank.x = 10;
 		topRank.y = 8;
 		container.addChild(topRank);
 
-		// Top-left suit (smaller, below rank)
+		// Top-left suit
 		const smallSuitStyle = new TextStyle({
 			fontFamily: 'Arial, sans-serif',
 			fontSize: 20,
 			fill: color,
 		});
-		const topSuit = new Text({ text: suit, style: smallSuitStyle });
+		const topSuit = new Text({ text: suitSymbol, style: smallSuitStyle });
 		topSuit.x = 12;
 		topSuit.y = 36;
 		container.addChild(topSuit);
 
-		// Center suit (large)
+		// Center suit
 		const centerSuitStyle = new TextStyle({
 			fontFamily: 'Arial, sans-serif',
 			fontSize: 56,
 			fill: color,
 		});
-		const centerSuit = new Text({ text: suit, style: centerSuitStyle });
+		const centerSuit = new Text({ text: suitSymbol, style: centerSuitStyle });
 		centerSuit.anchor.set(0.5);
 		centerSuit.x = CARD_WIDTH / 2;
 		centerSuit.y = CARD_HEIGHT / 2;
 		container.addChild(centerSuit);
 
-		// Bottom-right rank (rotated)
-		const bottomRank = new Text({ text: rank, style: textStyle });
+		// Bottom-right rank
+		const bottomRank = new Text({ text: rankStr, style: textStyle });
 		bottomRank.anchor.set(1, 1);
 		bottomRank.x = CARD_WIDTH - 10;
 		bottomRank.y = CARD_HEIGHT - 8;
 		bottomRank.rotation = Math.PI;
 		container.addChild(bottomRank);
 
-		// Bottom-right suit (rotated)
-		const bottomSuit = new Text({ text: suit, style: smallSuitStyle });
+		// Bottom-right suit
+		const bottomSuit = new Text({ text: suitSymbol, style: smallSuitStyle });
 		bottomSuit.anchor.set(1, 1);
 		bottomSuit.x = CARD_WIDTH - 12;
 		bottomSuit.y = CARD_HEIGHT - 36;
 		bottomSuit.rotation = Math.PI;
 		container.addChild(bottomSuit);
 
-		const card: Card = {
-			id,
-			suit,
-			rank,
-			color,
-			selected: false,
-			hovered: false,
-			container,
-		};
-
-		// Click handler
-		container.on('pointerdown', (event: FederatedPointerEvent) => {
-			this.toggleCard(card);
-		});
-
-		// Hover effects
-		container.on('pointerover', () => {
-			card.hovered = true;
-			this.positionCards();
-		});
-
-		container.on('pointerout', () => {
-			card.hovered = false;
-			this.positionCards();
-		});
-
-		return card;
+		return container;
 	}
 
-	private toggleCard(card: Card): void {
-		card.selected = !card.selected;
-		card.hovered = false;
+	private dealInitialCards(): void {
+		// Deal 9 cards to each player
+		for (let i = 0; i < 9; i++) {
+			this.playerHand.push(this.deck.pop()!);
+			this.computerHand.push(this.deck.pop()!);
+		}
 
-		// Bring selected card to front
-		if (card.selected) {
-			this.handContainer.setChildIndex(
-				card.container,
-				this.handContainer.children.length - 1
-			);
+		this.displayPlayerHand();
+		this.updateDeckDisplay();
+	}
+
+	private displayPlayerHand(): void {
+		// Remove all cards from hand container
+		this.handContainer.removeChildren();
+
+		// Add player's hand cards
+		this.playerHand.forEach(card => {
+			this.handContainer.addChild(card.container);
+		});
+
+		this.positionCards();
+	}
+
+	private handleCardClick(card: Card): void {
+		if (!this.playerHand.includes(card)) return;
+
+		if (this.gamePhase === 'selecting-hidden-reserve') {
+			this.handleHiddenReserveSelection(card);
+		} else if (this.gamePhase === 'selecting-visible-reserve') {
+			this.handleVisibleReserveSelection(card);
+		} else if (this.gamePhase === 'player-turn') {
+			this.handlePlayerTurnSelection(card);
+		}
+	}
+
+	private handleHiddenReserveSelection(card: Card): void {
+		card.selected = !card.selected;
+
+		const selectedCount = this.playerHand.filter(c => c.selected).length;
+
+		if (selectedCount === 3) {
+			this.playButton.visible = true;
+			this.statusText.text = 'Click "Play Cards" to confirm your hidden reserve';
+		} else {
+			this.playButton.visible = false;
+			this.statusText.text = `Select 3 cards for your hidden reserve (${selectedCount}/3)`;
 		}
 
 		this.positionCards();
 	}
 
-	private positionCards(instant: Boolean = false): void {
+	private handleVisibleReserveSelection(card: Card): void {
+		card.selected = !card.selected;
+		this.positionCards();
+
+		const selectedCards = this.playerHand.filter(c => c.selected);
+		const placement = this.validatePlacement(selectedCards);
+
+		if (placement && this.playerVisibleReserve.length < 3) {
+			this.playButton.visible = true;
+			this.statusText.text = `Valid placement! Click "Play Cards" to add to visible reserve (${this.playerVisibleReserve.length}/3)`;
+		} else if (selectedCards.length > 0) {
+			this.playButton.visible = false;
+			this.statusText.text = 'Invalid placement - cards must be same kind or a straight of 3+';
+		} else {
+			this.playButton.visible = false;
+			this.statusText.text = `Select cards for visible reserve placement ${this.playerVisibleReserve.length + 1}/3`;
+		}
+	}
+
+	private handlePlayerTurnSelection(card: Card): void {
+		card.selected = !card.selected;
+		this.positionCards();
+
+		const selectedCards = this.playerHand.filter(c => c.selected);
+		const placement = this.validatePlacement(selectedCards);
+
+		if (placement && this.canPlayOnStack(placement)) {
+			this.playButton.visible = true;
+			this.statusText.text = 'Valid play! Click "Play Cards" to place on stack';
+		} else if (selectedCards.length > 0 && placement) {
+			this.playButton.visible = false;
+			this.statusText.text = 'Cannot play - cards too low for current stack';
+		} else if (selectedCards.length > 0) {
+			this.playButton.visible = false;
+			this.statusText.text = 'Invalid placement - cards must be same suit or a straight of 3+';
+		} else {
+			this.playButton.visible = false;
+			const pickupOption = this.stack.length > 0 ? ' or click here to pick up stack' : '';
+			this.statusText.text = `Your turn - select cards to play${pickupOption}`;
+		}
+	}
+
+	private handleCardHover(card: Card, isHovering: boolean): void {
+		if (!this.playerHand.includes(card)) return;
+		card.hovered = isHovering;
+		this.positionCards();
+	}
+
+	private handlePlayButton(): void {
+		if (this.gamePhase === 'selecting-hidden-reserve') {
+			this.completeHiddenReserveSelection();
+		} else if (this.gamePhase === 'selecting-visible-reserve') {
+			this.completeVisibleReservePlacement();
+		} else if (this.gamePhase === 'player-turn') {
+			this.playSelectedCards();
+		}
+	}
+
+	private completeHiddenReserveSelection(): void {
+		const selected = this.playerHand.filter(c => c.selected);
+		if (selected.length !== 3) return;
+
+		// Move selected cards to hidden reserve
+		this.playerHiddenReserve = selected;
+		this.playerHand = this.playerHand.filter(c => !c.selected);
+
+		// Computer does the same (random selection)
+		for (let i = 0; i < 3; i++) {
+			const idx = Math.floor(Math.random() * this.computerHand.length);
+			this.computerHiddenReserve.push(this.computerHand.splice(idx, 1)[0]);
+		}
+
+		this.gamePhase = 'selecting-visible-reserve';
+		this.playButton.visible = false;
+		this.statusText.text = 'Select cards for visible reserve placement 1/3';
+		this.displayPlayerHand();
+	}
+
+	private completeVisibleReservePlacement(): void {
+		const selected = this.playerHand.filter(c => c.selected);
+		const placement = this.validatePlacement(selected);
+
+		if (!placement || this.playerVisibleReserve.length >= 3) return;
+
+		this.playerVisibleReserve.push(placement);
+		this.playerHand = this.playerHand.filter(c => !c.selected);
+
+		// Draw back to 3 if needed
+		this.drawToMinimum(this.playerHand);
+
+		if (this.playerVisibleReserve.length === 3) {
+			// Computer makes its visible reserve
+			this.computerMakesVisibleReserve();
+
+			// Start player turn
+			this.gamePhase = 'player-turn';
+			this.statusText.text = 'Your turn - select cards to play';
+		} else {
+			this.statusText.text = `Select cards for visible reserve placement ${this.playerVisibleReserve.length + 1}/3`;
+		}
+
+		this.playButton.visible = false;
+		this.displayPlayerHand();
+		this.updateDeckDisplay();
+	}
+
+	private playSelectedCards(): void {
+		const selected = this.playerHand.filter(c => c.selected);
+		const placement = this.validatePlacement(selected);
+
+		if (!placement || !this.canPlayOnStack(placement)) return;
+
+		// Add cards to stack
+		this.stack.push(...placement.cards);
+		this.playerHand = this.playerHand.filter(c => !c.selected);
+
+		this.drawToMinimum(this.playerHand);
+
+		// Check for Aces - they clear the stack
+		const hasAce = placement.cards.some(c => c.rank === 14);
+		if (hasAce) {
+			this.discardPile.push(...this.stack);
+			this.stack = [];
+			this.statusText.text = 'Ace! Stack cleared. Play again!';
+			// Player goes again - stay in player-turn phase
+		} else {
+			// Check if player is out of cards
+			if (this.checkWinCondition()) return;
+
+			// Computer's turn
+			this.gamePhase = 'computer-turn';
+			this.computerTurn();
+		}
+
+		this.playButton.visible = false;
+		this.displayPlayerHand();
+		this.updateStackDisplay();
+		this.updateDeckDisplay();
+	}
+
+	private computerMakesVisibleReserve(): void {
+		// Stub: computer randomly makes 3 placements
+		for (let i = 0; i < 3; i++) {
+			if (this.computerHand.length === 0) break;
+
+			// Try to make a valid placement
+			const card = this.computerHand.pop()!;
+			this.computerVisibleReserve.push({ cards: [card], type: 'single' });
+
+			this.drawToMinimum(this.computerHand);
+		}
+	}
+
+	private computerTurn(): void {
+		// Stub: computer tries to play a random card or picks up stack
+		if (this.computerHand.length === 0) {
+			// Computer needs to use visible reserve
+			if (this.computerVisibleReserve.length > 0) {
+				const placement = this.computerVisibleReserve.pop()!;
+				this.computerHand.push(...placement.cards);
+			} else if (this.computerHiddenReserve.length > 0) {
+				// Use hidden reserve
+				const card = this.computerHiddenReserve.pop()!;
+				const placement = { cards: [card], type: 'single' as const };
+
+				if (this.canPlayOnStack(placement)) {
+					this.stack.push(card);
+					this.statusText.text = 'Computer played from hidden reserve';
+				} else {
+					this.computerHand.push(card, ...this.stack);
+					this.stack = [];
+					this.statusText.text = 'Computer picked up stack';
+				}
+
+				this.gamePhase = 'player-turn';
+				this.updateStackDisplay();
+				return;
+			}
+		}
+
+		// Try to play any card
+		let played = false;
+		for (let i = 0; i < this.computerHand.length; i++) {
+			const card = this.computerHand[i];
+			const placement = { cards: [card], type: 'single' as const };
+
+			if (this.canPlayOnStack(placement)) {
+				this.stack.push(card);
+				this.computerHand.splice(i, 1);
+				played = true;
+
+				// Check for Ace
+				if (card.rank === 14) {
+					this.discardPile.push(...this.stack);
+					this.stack = [];
+					// Computer goes again
+					setTimeout(() => this.computerTurn(), 1000);
+					return;
+				}
+
+				break;
+			}
+		}
+
+		if (!played) {
+			// Pick up stack
+			this.computerHand.push(...this.stack);
+			this.stack = [];
+			this.statusText.text = 'Computer picked up the stack';
+		} else {
+			this.drawToMinimum(this.computerHand);
+			this.statusText.text = 'Computer played a card';
+		}
+
+		// Check win condition
+		if (this.checkWinCondition()) return;
+
+		this.gamePhase = 'player-turn';
+		this.updateStackDisplay();
+		this.updateDeckDisplay();
+	}
+
+	private validatePlacement(cards: Card[]): Placement | null {
+		if (cards.length === 0) return null;
+		if (cards.length === 1) return { cards, type: 'single' };
+
+		// Check for same rank
+		const allSameRank = cards.every(c => c.rank === cards[0].rank);
+		if (allSameRank) return { cards, type: 'multiple' };
+
+		// Check for straight (3+)
+		if (cards.length >= 3) {
+			const sorted = [...cards].sort((a, b) => a.rank - b.rank);
+			let isStraight = true;
+			for (let i = 1; i < sorted.length; i++) {
+				if (sorted[i].rank !== sorted[i-1].rank + 1) {
+					isStraight = false;
+					break;
+				}
+			}
+			if (isStraight) return { cards, type: 'straight' };
+		}
+
+		return null;
+	}
+
+	private canPlayOnStack(placement: Placement): boolean {
+		if (this.stack.length === 0) return true;
+
+		const topCard = this.stack[this.stack.length - 1];
+		const lowestCard = placement.cards.reduce((min, card) =>
+			card.rank < min.rank ? card : min
+		);
+
+		// 2s and Aces can always be played
+		if (lowestCard.rank === 2 || lowestCard.rank === 14) return true;
+
+		// Otherwise must be >= top card
+		return lowestCard.rank >= topCard.rank;
+	}
+
+	private drawToMinimum(hand: Card[]): void {
+		while (hand.length < 3 && this.deck.length > 0) {
+			hand.push(this.deck.pop()!);
+		}
+	}
+
+	private checkWinCondition(): boolean {
+		// Check player win
+		if (this.playerHand.length === 0 &&
+			this.playerVisibleReserve.length === 0 &&
+			this.playerHiddenReserve.length === 0) {
+			this.gamePhase = 'game-over';
+			this.statusText.text = 'You win!';
+			return true;
+		}
+
+		// Check computer win
+		if (this.computerHand.length === 0 &&
+			this.computerVisibleReserve.length === 0 &&
+			this.computerHiddenReserve.length === 0) {
+			this.gamePhase = 'game-over';
+			this.statusText.text = 'Computer wins!';
+			return true;
+		}
+
+		return false;
+	}
+
+	private updateDeckDisplay(): void {
+		this.deckText.text = `Deck: ${this.deck.length}`;
+	}
+
+	private updateStackDisplay(): void {
+		if (this.stack.length === 0) {
+			this.stackText.text = 'Stack: Empty';
+		} else {
+			const topCard = this.stack[this.stack.length - 1];
+			this.stackText.text = `Stack: ${rankToString(topCard.rank)}${SUIT_SYMBOLS[topCard.suit]} (${this.stack.length})`;
+		}
+	}
+
+	private positionCards(): void {
 		const screenWidth = this.app.screen.width;
 		const screenHeight = this.app.screen.height;
 
-		// Calculate total width of hand
-		const totalWidth = (this.cards.length - 1) * CARD_SPACING + CARD_WIDTH;
+		const totalWidth = (this.playerHand.length - 1) * CARD_SPACING + CARD_WIDTH;
 		const startX = (screenWidth - totalWidth) / 2;
-
-		// Base Y position (bottom of screen, half hidden)
 		const baseY = screenHeight - CARD_HEIGHT * UNSELECTED_VISIBLE;
 
-		this.cards.forEach((card, index) => {
+		this.playerHand.forEach((card, index) => {
 			const targetX = startX + index * CARD_SPACING;
-
-			// let targetY = card.selected ? baseY - SELECTED_RISE : baseY;
 			let targetY = baseY;
 			if (card.selected) targetY -= SELECTED_RISE;
 			else if (card.hovered) targetY -= HOVER_RISE;
 
-			if (instant) {
-				card.container.x = targetX;
-				card.container.y = targetY;
-			} else {
-				this.animateCard(card.container, targetX, targetY);
-			}
+			this.animateCard(card.container, targetX, targetY);
 		});
 	}
 
+	private positionCardsImmediate(): void {
+		const screenWidth = this.app.screen.width;
+		const screenHeight = this.app.screen.height;
+
+		const totalWidth = (this.playerHand.length - 1) * CARD_SPACING + CARD_WIDTH;
+		const startX = (screenWidth - totalWidth) / 2;
+		const baseY = screenHeight - CARD_HEIGHT * UNSELECTED_VISIBLE;
+
+		this.playerHand.forEach((card, index) => {
+			const targetX = startX + index * CARD_SPACING;
+			let targetY = baseY;
+			if (card.selected) targetY -= SELECTED_RISE;
+			else if (card.hovered) targetY -= HOVER_RISE;
+
+			card.container.x = targetX;
+			card.container.y = targetY;
+		});
+
+		this.positionUI();
+	}
+
 	private animateCard(container: Container, targetX: number, targetY: number): void {
-		const duration = 150; // ms
+		const existingAnimationId = this.animatingCards.get(container);
+		if (existingAnimationId !== undefined) {
+			cancelAnimationFrame(existingAnimationId);
+		}
+
+		const duration = 150;
 		const startX = container.x;
 		const startY = container.y;
 		const startTime = performance.now();
 
 		const animate = (currentTime: number) => {
+			if (!this.animatingCards.has(container)) {
+				return;
+			}
+
 			const elapsed = currentTime - startTime;
 			const progress = Math.min(elapsed / duration, 1);
-
-			// Ease out cubic
 			const eased = 1 - Math.pow(1 - progress, 3);
 
 			container.x = startX + (targetX - startX) * eased;
 			container.y = startY + (targetY - startY) * eased;
 
 			if (progress < 1) {
-				requestAnimationFrame(animate);
+				const animationId = requestAnimationFrame(animate);
+				this.animatingCards.set(container, animationId);
+			} else {
+				this.animatingCards.delete(container);
 			}
 		};
 
-		requestAnimationFrame(animate);
+		const animationId = requestAnimationFrame(animate);
+		this.animatingCards.set(container, animationId);
 	}
 }
 
