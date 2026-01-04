@@ -3,9 +3,10 @@
 	"version": "0.0.0",
 	"private": true,
 	"scripts": {
-		"deploy": "wrangler deploy",
-		"dev": "wrangler dev",
-		"start": "wrangler dev",
+		"build:frontend": "esbuild frontend/*.ts --bundle --outdir=dist --minify",
+		"deploy": "npm run build:frontend && wrangler deploy",
+		"dev": "npm run build:frontend && wrangler dev",
+		"start": "npm run build:frontend && wrangler dev",
 		"test": "vitest",
 		"cf-typegen": "wrangler types"
 	},
@@ -14,5 +15,9 @@
 		"typescript": "^5.5.2",
 		"vitest": "~3.2.0",
 		"wrangler": "^4.54.0"
+	},
+	"dependencies": {
+		"bcryptjs": "^3.0.3",
+		"pixi.js": "^8.14.3"
 	}
 }
