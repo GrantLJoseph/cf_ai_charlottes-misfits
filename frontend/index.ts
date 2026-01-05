@@ -60,8 +60,6 @@ function rankToString(rank: number): string {
 
 class CardGame {
 	private app: Application;
-	private cards: Card[] = [];
-	private handContainer: Container;
 	private animatingCards: Map<Container, number> = new Map();
 
 	// Game state
@@ -73,7 +71,6 @@ class CardGame {
 	private computerHand: Card[] = [];
 	private computerHiddenReserve: Card[] = [];
 	private computerVisibleReserve: Placement[] = [];
-	private discardPile: Card[] = [];
 
 	private gamePhase: GamePhase = 'selecting-hidden-reserve';
 	private statusText: Text;
@@ -94,11 +91,8 @@ class CardGame {
 	private leftScrollArrow: Container;
 	private rightScrollArrow: Container;
 
-	private playerClickedStack = false;
-
 	constructor() {
 		this.app = new Application();
-		this.handContainer = new Container();
 		this.statusText = new Text();
 		this.deckText = new Text();
 		this.stackText = new Text();
@@ -548,18 +542,12 @@ class CardGame {
 				this.handlePlayerTurnSelection(card);
 			}
 		} else if (this.gamePhase === 'player-turn' && card === this.stack[this.stack.length - 1]) {
-			if (this.playerClickedStack) {
-				this.takeStack(this.playerHand);
-				this.playerClickedStack = false;
+			this.takeStack(this.playerHand);
 
-				this.updateStackDisplay();
-				this.positionCards();
+			this.updateStackDisplay();
+			this.positionCards();
 
-				this.startComputerTurn();
-			} else {
-				this.statusText.text = "Click stack again to confirm."
-				this.playerClickedStack = true;
-			}
+			this.startComputerTurn();
 		}
 	}
 
