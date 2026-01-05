@@ -79,6 +79,8 @@ class CardGame {
 	private playButton: Container;
 	private deckContainer: Container;
 	private stackContainer: Container;
+
+	private scrollInterval: number | null = null;
 	private handScrollOffset: number = 0;
 	private leftScrollArrow: Container;
 	private rightScrollArrow: Container;
@@ -96,6 +98,46 @@ class CardGame {
 		this.stackContainer = new Container();
 		this.leftScrollArrow = new Container();
 		this.rightScrollArrow = new Container();
+	}
+
+	async init(): Promise<void> {
+		await this.app.init({
+			background: '#1a472a',
+			resizeTo: window,
+			antialias: true,
+		});
+
+		const container = document.getElementById('game-container');
+		if (!container) throw Error('Cannot get game container');
+		container.appendChild(this.app.canvas);
+
+		// Don't use handContainer anymore - add all cards directly to stage
+		this.app.stage.addChild(this.deckContainer);
+		this.app.stage.addChild(this.stackContainer);
+
+		// Create UI elements
+		this.createStatusText();
+		this.createDeckDisplay();
+		this.createStackDisplay();
+		this.createPlayButton();
+		this.createScrollArrows();
+
+		// Initialize game
+		this.initializeDeck();
+		this.positionUI();
+
+		// Position all deck cards at deck location
+		this.positionDeckCards();
+
+		this.dealInitialCards();
+
+		window.addEventListener('resize', () => {
+			this.animatingCards.clear();
+			this.positionUI();
+			this.positionDeckCards();
+			this.positionStackCards();
+			this.positionCards(true);
+		});
 	}
 
 	private createScrollArrows(): void {
@@ -144,8 +186,6 @@ class CardGame {
 		this.app.stage.addChild(this.leftScrollArrow);
 		this.app.stage.addChild(this.rightScrollArrow);
 	}
-
-	private scrollInterval: number | null = null;
 
 
 	private startScrolling(direction: number): void {
@@ -210,7 +250,7 @@ class CardGame {
 		}
 		this.leftScrollArrow.visible = canScrollLeft;
 		this.leftScrollArrow.x = 20;
-		this.leftScrollArrow.y = screenHeight - CARD_HEIGHT / 2 - 30;
+		this.leftScrollArrow.y = screenHeight - CARD_HEIGHT * UNSELECTED_VISIBLE / 2 - this.leftScrollArrow.height / 2;
 
 		// Show right arrow if we can scroll right (offset can decrease toward min)
 		const canScrollRight = this.handScrollOffset > minScrollOffset + 1;
@@ -219,47 +259,7 @@ class CardGame {
 		}
 		this.rightScrollArrow.visible = canScrollRight;
 		this.rightScrollArrow.x = screenWidth - 50;
-		this.rightScrollArrow.y = screenHeight - CARD_HEIGHT / 2 - 30;
-	}
-
-	async init(): Promise<void> {
-		await this.app.init({
-			background: '#1a472a',
-			resizeTo: window,
-			antialias: true,
-		});
-
-		const container = document.getElementById('game-container');
-		if (!container) throw Error('Cannot get game container');
-		container.appendChild(this.app.canvas);
-
-		// Don't use handContainer anymore - add all cards directly to stage
-		this.app.stage.addChild(this.deckContainer);
-		this.app.stage.addChild(this.stackContainer);
-
-		// Create UI elements
-		this.createStatusText();
-		this.createDeckDisplay();
-		this.createStackDisplay();
-		this.createPlayButton();
-		this.createScrollArrows();
-
-		// Initialize game
-		this.initializeDeck();
-		this.positionUI();
-
-		// Position all deck cards at deck location
-		this.positionDeckCards();
-
-		this.dealInitialCards();
-
-		window.addEventListener('resize', () => {
-			this.animatingCards.clear();
-			this.positionUI();
-			this.positionDeckCards();
-			this.positionStackCards();
-			this.positionCards(true);
-		});
+		this.rightScrollArrow.y = screenHeight - CARD_HEIGHT * UNSELECTED_VISIBLE / 2 - this.rightScrollArrow.height / 2;
 	}
 
 	private createStatusText(): void {
@@ -901,12 +901,10 @@ class CardGame {
 		this.deckContainer.removeChildren();
 		this.deckContainer.addChild(this.deckText);
 
-		if (this.deck.length === 0) {
-			const placeholder = new Graphics();
-			placeholder.roundRect(0, 0, CARD_WIDTH, CARD_HEIGHT, CARD_RADIUS);
-			placeholder.stroke({ color: 0xffffff, width: 2, alpha: 0.5 });
-			this.deckContainer.addChildAt(placeholder, 0);
-		}
+		const placeholder = new Graphics();
+		placeholder.roundRect(0, 0, CARD_WIDTH, CARD_HEIGHT, CARD_RADIUS);
+		placeholder.stroke({ color: 0xffffff, width: 2, alpha: 0.5 });
+		this.deckContainer.addChildAt(placeholder, 0);
 
 		this.deckText.text = `${this.deck.length}`;
 		this.deckText.y = CARD_HEIGHT + 10;
@@ -917,12 +915,11 @@ class CardGame {
 		this.stackContainer.removeChildren();
 		this.stackContainer.addChild(this.stackText);
 
-		if (this.stack.length === 0) {
-			const placeholder = new Graphics();
-			placeholder.roundRect(0, 0, CARD_WIDTH, CARD_HEIGHT, CARD_RADIUS);
-			placeholder.stroke({ color: 0xffffff, width: 2, alpha: 0.5 });
-			this.stackContainer.addChildAt(placeholder, 0);
-		}
+		// Background placeholder
+		const placeholder = new Graphics();
+		placeholder.roundRect(0, 0, CARD_WIDTH, CARD_HEIGHT, CARD_RADIUS);
+		placeholder.stroke({ color: 0xffffff, width: 2, alpha: 0.5 });
+		this.stackContainer.addChildAt(placeholder, 0);
 
 		this.stackText.text = `${this.stack.length}`;
 		this.stackText.y = CARD_HEIGHT + 10;
