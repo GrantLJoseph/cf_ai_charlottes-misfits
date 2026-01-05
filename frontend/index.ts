@@ -320,6 +320,8 @@ class CardGame {
 	}
 
 	private createPlayButton(): void {
+		const screenHeight = this.app.screen.height;
+
 		const bg = new Graphics();
 		bg.roundRect(0, 0, 200, 50, 8);
 		bg.fill({ color: 0x3b82f6 });
@@ -363,7 +365,7 @@ class CardGame {
 		this.stackContainer.y = screenHeight / 2 - CARD_HEIGHT / 2;
 
 		this.playButton.x = screenWidth / 2 - 100;
-		this.playButton.y = screenHeight / 2 - 200;
+		this.playButton.y = screenHeight / 2 + 200;
 
 		// Player reserves: to the right of the deck
 		const rightGapSize = screenWidth - (this.deckContainer.x + CARD_WIDTH);
