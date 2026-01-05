@@ -90,3 +90,10 @@ That's closer. When I scroll to the right, it stops letting me scroll while the 
 
 # 20
 It's very close now. It just still sometimes gets stuck where scrolling is disabled before the last card in that direction is fully visible.
+
+# 21
+Make sure you are familiar with the game rules in rules.md. Currently, the player's hidden and visible reserves just disappear when selected. Instead, the player's reserves should exist on the game board to the right of the stack and the deck. The computer's reserves should exist to the left of the stack and deck.
+
+When the player selects their 3 hidden reserve cards, those cards should move to a horizontal row on the right side, staying face down. Each of the three visible reserve placements should be placed on top of one of these three hidden reserve cards (one placement per hidden reserve card). Since visible reserve placements can contain more than one card apiece, the cards within the placement should be stacked on top of each other downward. Each card except for the top, lowermost card should have just enough showing to see the suit and rank in the upper left corner of the card.
+
+The computer's reserves should be essentially the same and not rotated away from the player.

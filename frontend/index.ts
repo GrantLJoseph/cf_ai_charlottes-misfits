@@ -31,7 +31,10 @@ const UNSELECTED_VISIBLE = 0.5;
 const COMPUTER_HAND_VISIBLE = 0.2;
 const SELECTED_RISE = 80;
 const HOVER_RISE = 10;
-const HAND_OVERFLOW_ALLOWED = 0.05;
+
+// Reserve display configuration
+const RESERVE_SPACING = CARD_WIDTH + 20; // Horizontal spacing between reserve piles
+const RESERVE_CARD_PEEK = 60; // How much of each stacked card shows (enough for rank/suit)
 
 const SUIT_SYMBOLS = {
 	hearts: '♥',
@@ -80,6 +83,12 @@ class CardGame {
 	private deckContainer: Container;
 	private stackContainer: Container;
 
+	// Reserve containers for positioning reference
+	private playerReserveBaseX: number = 0;
+	private playerReserveBaseY: number = 0;
+	private computerReserveBaseX: number = 0;
+	private computerReserveBaseY: number = 0;
+
 	private scrollInterval: number | null = null;
 	private handScrollOffset: number = 0;
 	private leftScrollArrow: Container;
@@ -122,7 +131,6 @@ class CardGame {
 		this.createPlayButton();
 		this.createScrollArrows();
 
-		// Initialize game
 		this.initializeDeck();
 		this.positionUI();
 
@@ -136,6 +144,7 @@ class CardGame {
 			this.positionUI();
 			this.positionDeckCards();
 			this.positionStackCards();
+			this.positionReserveCards(true);
 			this.positionCards(true);
 		});
 	}
@@ -352,6 +361,21 @@ class CardGame {
 
 		this.playButton.x = screenWidth / 2 - 100;
 		this.playButton.y = screenHeight / 2 - 200;
+
+		// Player reserves: to the right of the deck
+		const rightGapSize = screenWidth - (this.deckContainer.x + CARD_WIDTH);
+
+		this.playerReserveBaseX = this.deckContainer.x + CARD_WIDTH + (rightGapSize - (3 * CARD_WIDTH + 40)) / 2;
+		this.playerReserveBaseY = this.deckContainer.y;
+
+		// Computer reserves: to the left of the stack
+		const leftGapSize = this.stackContainer.x;
+
+		this.computerReserveBaseX = (leftGapSize - (3 * CARD_WIDTH + 40)) / 2;
+		this.computerReserveBaseY = this.stackContainer.y;
+
+		// Reposition reserve cards when UI changes
+		this.positionReserveCards();
 	}
 
 	private initializeDeck(): void {
@@ -612,8 +636,10 @@ class CardGame {
 		this.playerHiddenReserve = selected;
 		this.playerHand = this.playerHand.filter(c => !c.selected);
 
-		// TODO: Move physically to hidden reserve
-		for (const card of this.playerHiddenReserve) card.container.destroy();
+		// Clear selection state
+		this.playerHiddenReserve.forEach(card => {
+			card.selected = false;
+		});
 
 		// Flip remaining cards face up so player can see them
 		this.playerHand.forEach(card => this.flipCardFaceUp(card));
@@ -622,14 +648,18 @@ class CardGame {
 		for (let i = 0; i < 3; i++) {
 			const card = this.computerHand.pop()!;
 			this.computerHiddenReserve.push(card);
-			// TODO: Move physically to hidden reserve
-			card.container.destroy();
 		}
+
+		// Computer places visible reserve to give player advantage
+		this.computerMakesVisibleReserve();
 
 		this.gamePhase = 'selecting-visible-reserve';
 		this.playButton.visible = false;
 		this.statusText.text = 'Select cards for visible reserve placement 1/3';
+
+		// Position all cards including new reserve cards
 		this.positionCards();
+		this.positionReserveCards();
 	}
 
 	private completeVisibleReservePlacement(): void {
@@ -638,19 +668,16 @@ class CardGame {
 
 		if (!placement || this.playerVisibleReserve.length >= 3) return;
 
-		this.playerVisibleReserve.push(placement);
-		this.playerHand = this.playerHand.filter(c => !c.selected);
+		// Clear selection state
+		selected.forEach(card => card.selected = false);
 
-		// TODO physically move cards to visible reserve
-		for (const card of selected) card.container.destroy();
+		this.playerVisibleReserve.push(placement);
+		this.playerHand = this.playerHand.filter(c => !selected.includes(c));
 
 		// Draw back to 3 if needed
 		this.drawToMinimum(this.playerHand);
 
 		if (this.playerVisibleReserve.length === 3) {
-			// Computer makes its visible reserve
-			this.computerMakesVisibleReserve();
-
 			// Start player turn
 			this.gamePhase = 'player-turn';
 			this.statusText.text = 'Your turn - select cards to play';
@@ -660,6 +687,7 @@ class CardGame {
 
 		this.playButton.visible = false;
 		this.positionCards();
+		this.positionReserveCards();
 		this.updateDeckDisplay();
 	}
 
@@ -700,13 +728,17 @@ class CardGame {
 
 			// Try to make a valid placement
 			const card = this.computerHand.pop()!;
-			this.computerVisibleReserve.push({ cards: [card], type: 'single' });
 
-			// TODO: Move physically to visible reserve
-			card.container.destroy();
+			// Flip face up for visible reserve
+			this.flipCardFaceUp(card);
+
+			this.computerVisibleReserve.push({ cards: [card], type: 'single' });
 
 			this.drawToMinimum(this.computerHand);
 		}
+
+		// Position all reserve cards
+		this.positionReserveCards();
 	}
 
 	private startComputerTurn(): void {
@@ -1062,6 +1094,69 @@ class CardGame {
 		this.stack.forEach(card => {
 			card.container.x = this.stackContainer.x;
 			card.container.y = this.stackContainer.y;
+		});
+	}
+
+	private positionReserveCards(immediate = false): void {
+		// Position player's hidden reserve (3 cards in a row)
+		this.playerHiddenReserve.forEach((card, index) => {
+			const targetX = this.playerReserveBaseX + index * RESERVE_SPACING;
+			const targetY = this.playerReserveBaseY;
+			card.container.zIndex = 0;
+
+			if (immediate) {
+				card.container.x = targetX;
+				card.container.y = targetY;
+			} else {
+				this.animateCard(card.container, targetX, targetY);
+			}
+		});
+
+		// Position player's visible reserve (stacked on top of hidden reserve)
+		this.playerVisibleReserve.forEach((placement, pileIndex) => {
+			placement.cards.forEach((card, cardIndex) => {
+				const targetX = this.playerReserveBaseX + pileIndex * RESERVE_SPACING;
+				// Stack cards downward, with each card peeking out
+				const targetY = this.playerReserveBaseY + cardIndex * RESERVE_CARD_PEEK;
+				card.container.zIndex = 10 + cardIndex;
+
+				if (immediate) {
+					card.container.x = targetX;
+					card.container.y = targetY;
+				} else {
+					this.animateCard(card.container, targetX, targetY);
+				}
+			});
+		});
+
+		// Position computer's hidden reserve
+		this.computerHiddenReserve.forEach((card, index) => {
+			const targetX = this.computerReserveBaseX + index * RESERVE_SPACING;
+			const targetY = this.computerReserveBaseY;
+			card.container.zIndex = 0;
+
+			if (immediate) {
+				card.container.x = targetX;
+				card.container.y = targetY;
+			} else {
+				this.animateCard(card.container, targetX, targetY);
+			}
+		});
+
+		// Position computer's visible reserve
+		this.computerVisibleReserve.forEach((placement, pileIndex) => {
+			placement.cards.forEach((card, cardIndex) => {
+				const targetX = this.computerReserveBaseX + pileIndex * RESERVE_SPACING;
+				const targetY = this.computerReserveBaseY + cardIndex * RESERVE_CARD_PEEK;
+				card.container.zIndex = 10 + cardIndex;
+
+				if (immediate) {
+					card.container.x = targetX;
+					card.container.y = targetY;
+				} else {
+					this.animateCard(card.container, targetX, targetY);
+				}
+			});
 		});
 	}
 }
