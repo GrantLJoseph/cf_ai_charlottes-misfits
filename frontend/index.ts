@@ -79,6 +79,8 @@ class CardGame {
 	private deckContainer: Container;
 	private stackContainer: Container;
 
+	private playerClickedStack = false;
+
 	constructor() {
 		this.app = new Application();
 		this.handContainer = new Container();
@@ -381,8 +383,19 @@ class CardGame {
 			} else if (this.gamePhase === 'player-turn') {
 				this.handlePlayerTurnSelection(card);
 			}
-		} else if (this.stack.includes(card)) {
-			console.log(`${card.suit} was clicked on stack`);
+		} else if (this.gamePhase === 'player-turn' && card === this.stack[this.stack.length - 1]) {
+			if (this.playerClickedStack) {
+				this.takeStack(this.playerHand);
+				this.playerClickedStack = false;
+
+				this.updateStackDisplay();
+				this.positionCards();
+
+				this.startComputerTurn();
+			} else {
+				this.statusText.text = "Click stack again to confirm."
+				this.playerClickedStack = true;
+			}
 		}
 	}
 
@@ -439,7 +452,7 @@ class CardGame {
 			this.statusText.text = 'Invalid placement - cards must be same suit or a straight of 3+';
 		} else {
 			this.playButton.visible = false;
-			const pickupOption = this.stack.length > 0 ? ' or click here to pick up stack' : '';
+			const pickupOption = this.stack.length > 0 ? ' or take the stack' : '';
 			this.statusText.text = `Your turn - select cards to play${pickupOption}`;
 		}
 	}
@@ -533,17 +546,14 @@ class CardGame {
 		// Check for Aces - they clear the stack
 		const hasAce = placement.cards.some(c => c.rank === 14);
 		if (hasAce) {
-			this.discardPile.push(...this.stack);
-			this.stack = [];
+			this.discardStack();
 			this.statusText.text = 'Ace! Stack cleared. Play again!';
 			// Player goes again - stay in player-turn phase
 		} else {
 			// Check if player is out of cards
 			if (this.checkWinCondition()) return;
 
-			// Computer's turn
-			this.gamePhase = 'computer-turn';
-			setTimeout(() => this.computerTurn(), 1000);
+			this.startComputerTurn();
 		}
 
 		this.playButton.visible = false;
@@ -566,6 +576,11 @@ class CardGame {
 
 			this.drawToMinimum(this.computerHand);
 		}
+	}
+
+	private startComputerTurn(): void {
+		this.gamePhase = 'computer-turn';
+		setTimeout(() => this.computerTurn(), 1000);
 	}
 
 	private computerTurn(): void {
@@ -608,7 +623,8 @@ class CardGame {
 
 				// Check for Ace
 				if (card.rank === 14) {
-					this.discardPile.push(...this.stack);
+					this.discardStack();
+
 					this.stack = [];
 					// Computer goes again
 					setTimeout(() => this.computerTurn(), 1000);
@@ -688,15 +704,26 @@ class CardGame {
 	}
 
 	private takeStack(hand: Card[]): void {
-		hand.push(...this.stack);
+		this.stack.forEach(card => {
+			if (hand === this.computerHand)
+				this.flipCardFaceDown(card);
 
-		if (hand === this.computerHand) {
-			this.stack.forEach(card => this.flipCardFaceDown(card));
-		}
-
+			card.selected = false; // Needed to prevent top stack card from being selected
+			hand.push(card);
+		});
 		this.stack = [];
 
+		if (hand === this.playerHand) {
+			this.sortHand(hand);
+			console.log('Sorted hand:', hand);
+		}
+
 		this.positionCards();
+	}
+
+	private discardStack(): void {
+		this.stack.forEach(card => card.container.destroy());
+		this.stack = [];
 	}
 
 	private drawToMinimum(hand: Card[]): void {
