@@ -543,13 +543,22 @@ class CardGame {
 			} else if (this.gamePhase === 'player-turn') {
 				this.handlePlayerTurnSelection(card);
 			}
-		} else if (this.gamePhase === 'player-turn' && card === this.stack[this.stack.length - 1]) {
-			this.takeStack(this.playerHand);
+		} else if (this.gamePhase === 'player-turn') {
+			// Taking stack
+			if (card === this.stack[this.stack.length - 1]) {
+				this.takeStack(this.playerHand);
 
-			this.updateStackDisplay();
-			this.positionCards();
+				this.updateStackDisplay();
+				this.positionCards();
 
-			this.startComputerTurn();
+				this.startComputerTurn();
+			// Drawing from hidden reserve
+			} else if (this.playerHand.length == 0 && this.deck.length == 0 && this.playerVisibleReserve.length == 0 && this.playerHiddenReserve.includes(card)) {
+				this.playerHand.push(card);
+				this.flipCardFaceUp(card);
+				this.playerHiddenReserve = this.playerHiddenReserve.filter(c => c !== card);
+				this.positionCards();
+			}
 		}
 	}
 
@@ -597,7 +606,7 @@ class CardGame {
 
 		if (placement && this.canPlayOnStack(placement)) {
 			this.playButton.visible = true;
-			this.statusText.text = 'Valid play! Click "Play Cards" to place on stack';
+			this.statusText.text = 'Valid play! Click "Play Cards" to place on stack.';
 		} else if (selectedCards.length > 0 && placement) {
 			this.playButton.visible = false;
 			this.statusText.text = 'Cannot play - cards too low for current stack';
@@ -671,9 +680,7 @@ class CardGame {
 		this.drawToMinimum(this.playerHand);
 
 		if (this.playerVisibleReserve.length === 3) {
-			// Start player turn
-			this.gamePhase = 'player-turn';
-			this.statusText.text = 'Your turn - select cards to play';
+			this.startPlayerTurn();
 		} else {
 			this.statusText.text = `Select cards for visible reserve placement ${this.playerVisibleReserve.length + 1}/3`;
 		}
@@ -734,6 +741,17 @@ class CardGame {
 		this.positionReserveCards();
 	}
 
+	private startPlayerTurn(): void {
+		console.log(this.playerHand);
+
+		this.gamePhase = 'player-turn';
+
+		if (this.playerHand.length > 0)
+			this.statusText.text = 'Your turn - select cards to play';
+		else
+			this.statusText.text = 'Your turn - select a hidden reserve card';
+	}
+
 	private startComputerTurn(): void {
 		this.gamePhase = 'computer-turn';
 		setTimeout(() => this.computerTurn(), 1000);
@@ -760,7 +778,7 @@ class CardGame {
 					this.statusText.text = 'Computer picked up stack';
 				}
 
-				this.gamePhase = 'player-turn';
+				this.startPlayerTurn();
 				this.updateStackDisplay();
 				return;
 			}
