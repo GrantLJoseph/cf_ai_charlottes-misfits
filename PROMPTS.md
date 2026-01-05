@@ -75,3 +75,18 @@ Neither the bottom right suit nor rank are correctly positioned. The rank is too
 
 # 15
 The cards in the deck should actually be physically located in the deck display on screen. This should result in cards moving from the physical deck into the player's hand instead of coming from offscreen. No more artifical card back to represent the deck.
+
+# 16
+When the hand is too large to fit on screen, make it scrollable horizontally so no cards are unreachable. When there are cards off-screen on the left or right side respectively, there should be an arrow on that side pointing off-screen. Hovering over that arrow scrolls the hand cards in that direction.
+
+# 17
+The scroll arrows aren't working properly. The arrows don't keep scrolling when the arrow is continuously hovered. Other aspects may be broken as well.
+
+# 18
+At least the left scroll arrow appears when there isn't anything to scroll to. It may be appearing on the wrong side releative to where the overflowed cards are.Also, once the scrolling has finished to the left, there is no arrow to go back to the right to see those overflowed cards.
+
+# 19
+That's closer. When I scroll to the right, it stops letting me scroll while the farthest right card is still mostly off screen. It should let me keep scrolling until the farthest right or left card is fully on-screen. Also, once I scrolled to the right, it didn't let me scroll back to the left. Once the user scrolls in one direction, they categorically should be able to scroll back in the other direction.
+
+# 20
+It's very close now. It just still sometimes gets stuck where scrolling is disabled before the last card in that direction is fully visible.

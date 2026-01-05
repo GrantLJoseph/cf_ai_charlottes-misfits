@@ -31,6 +31,7 @@ const UNSELECTED_VISIBLE = 0.5;
 const COMPUTER_HAND_VISIBLE = 0.2;
 const SELECTED_RISE = 80;
 const HOVER_RISE = 10;
+const HAND_OVERFLOW_ALLOWED = 0.05;
 
 const SUIT_SYMBOLS = {
 	hearts: '♥',
@@ -78,6 +79,9 @@ class CardGame {
 	private playButton: Container;
 	private deckContainer: Container;
 	private stackContainer: Container;
+	private handScrollOffset: number = 0;
+	private leftScrollArrow: Container;
+	private rightScrollArrow: Container;
 
 	private playerClickedStack = false;
 
@@ -90,6 +94,132 @@ class CardGame {
 		this.playButton = new Container();
 		this.deckContainer = new Container();
 		this.stackContainer = new Container();
+		this.leftScrollArrow = new Container();
+		this.rightScrollArrow = new Container();
+	}
+
+	private createScrollArrows(): void {
+		// Left arrow
+		const leftArrowGraphic = new Graphics();
+		leftArrowGraphic.moveTo(30, 0);
+		leftArrowGraphic.lineTo(0, 30);
+		leftArrowGraphic.lineTo(30, 60);
+		leftArrowGraphic.fill({ color: 0x87ceeb, alpha: 1 });
+		this.leftScrollArrow.addChild(leftArrowGraphic);
+		this.leftScrollArrow.eventMode = 'static';
+		this.leftScrollArrow.cursor = 'pointer';
+		this.leftScrollArrow.visible = false;
+
+		// Make sure it's on top of cards
+		this.leftScrollArrow.zIndex = 100;
+
+		this.leftScrollArrow.on('pointerover', () => {
+			this.startScrolling(1);
+		});
+		this.leftScrollArrow.on('pointerout', () => {
+			this.stopScrolling();
+		});
+
+		// Right arrow
+		const rightArrowGraphic = new Graphics();
+		rightArrowGraphic.moveTo(0, 0);
+		rightArrowGraphic.lineTo(30, 30);
+		rightArrowGraphic.lineTo(0, 60);
+		rightArrowGraphic.fill({ color: 0x87ceeb, alpha: 1 });
+		this.rightScrollArrow.addChild(rightArrowGraphic);
+		this.rightScrollArrow.eventMode = 'static';
+		this.rightScrollArrow.cursor = 'pointer';
+		this.rightScrollArrow.visible = false;
+
+		// Make sure it's on top of cards
+		this.rightScrollArrow.zIndex = 100;
+
+		this.rightScrollArrow.on('pointerover', () => {
+			this.startScrolling(-1);
+		});
+		this.rightScrollArrow.on('pointerout', () => {
+			this.stopScrolling();
+		});
+
+		this.app.stage.addChild(this.leftScrollArrow);
+		this.app.stage.addChild(this.rightScrollArrow);
+	}
+
+	private scrollInterval: number | null = null;
+
+
+	private startScrolling(direction: number): void {
+		if (this.scrollInterval !== null) return;
+
+		this.scrollInterval = window.setInterval(() => {
+			const screenWidth = this.app.screen.width;
+			const totalWidth = (this.playerHand.length - 1) * CARD_SPACING + CARD_WIDTH;
+
+			// Calculate scroll bounds:
+			// maxScrollOffset = 0: leftmost card fully visible at left edge
+			// minScrollOffset: rightmost card fully visible at right edge
+			const maxScrollOffset = 0;
+			const minScrollOffset = screenWidth - totalWidth;
+
+			// Apply scroll with bounds checking
+			const newOffset = this.handScrollOffset + direction * 10;
+			this.handScrollOffset = Math.max(minScrollOffset, Math.min(maxScrollOffset, newOffset));
+
+			this.positionCards();
+			this.updateScrollArrows();
+		}, 16); // ~60fps
+	}
+
+	private stopScrolling(): void {
+		if (this.scrollInterval !== null) {
+			clearInterval(this.scrollInterval);
+			this.scrollInterval = null;
+		}
+	}
+
+	private updateScrollArrows(): void {
+		const screenWidth = this.app.screen.width;
+		const screenHeight = this.app.screen.height;
+
+		if (this.playerHand.length === 0) {
+			this.leftScrollArrow.visible = false;
+			this.rightScrollArrow.visible = false;
+			return;
+		}
+
+		// Calculate total width and bounds
+		const totalWidth = (this.playerHand.length - 1) * CARD_SPACING + CARD_WIDTH;
+
+		// If cards fit on screen, don't show arrows
+		if (totalWidth <= screenWidth) {
+			this.leftScrollArrow.visible = false;
+			this.rightScrollArrow.visible = false;
+			return;
+		}
+
+		// Calculate scroll bounds:
+		// maxScrollOffset = 0: leftmost card fully visible at left edge
+		// minScrollOffset: rightmost card fully visible at right edge
+		const maxScrollOffset = 0;
+		const minScrollOffset = screenWidth - totalWidth;
+
+		// Show left arrow if we can scroll left (offset can increase toward 0)
+		const canScrollLeft = this.handScrollOffset < maxScrollOffset - 1;
+		if (this.leftScrollArrow.visible && !canScrollLeft) {
+			this.stopScrolling();
+		}
+		this.leftScrollArrow.visible = canScrollLeft;
+		this.leftScrollArrow.x = 20;
+		this.leftScrollArrow.y = screenHeight - CARD_HEIGHT / 2 - 30;
+
+		// Show right arrow if we can scroll right (offset can decrease toward min)
+		const canScrollRight = this.handScrollOffset > minScrollOffset + 1;
+		if (this.rightScrollArrow.visible && !canScrollRight) {
+			this.stopScrolling();
+		}
+		this.rightScrollArrow.visible = canScrollRight;
+		this.rightScrollArrow.x = screenWidth - 50;
+		this.rightScrollArrow.y = screenHeight - CARD_HEIGHT / 2 - 30;
 	}
 
 	async init(): Promise<void> {
@@ -112,6 +242,7 @@ class CardGame {
 		this.createDeckDisplay();
 		this.createStackDisplay();
 		this.createPlayButton();
+		this.createScrollArrows();
 
 		// Initialize game
 		this.initializeDeck();
@@ -848,7 +979,8 @@ class CardGame {
 		const screenHeight = this.app.screen.height;
 
 		const playerTotalWidth = (this.playerHand.length - 1) * CARD_SPACING + CARD_WIDTH;
-		const playerStartX = (screenWidth - playerTotalWidth) / 2;
+		const centerOffset = (screenWidth - playerTotalWidth) / 2;
+		const playerStartX = playerTotalWidth <= screenWidth ? centerOffset : this.handScrollOffset;
 		const playerBaseY = screenHeight - CARD_HEIGHT * UNSELECTED_VISIBLE;
 
 		this.playerHand.forEach((card, index) => {
@@ -880,6 +1012,9 @@ class CardGame {
 				this.animateCard(card.container, targetX, targetY);
 			}
 		})
+
+		this.positionUI();
+		this.updateScrollArrows();
 	}
 
 	private animateCard(container: Container, targetX: number, targetY: number): void {
