@@ -139,6 +139,15 @@ class CardGame {
 
 		this.dealInitialCards();
 
+		// Computer makes hidden reserve selection first
+		for (let i = 0; i < 3; i++) {
+			const card = this.computerHand.pop()!;
+			this.computerHiddenReserve.push(card);
+		}
+
+		this.positionCards();
+		this.positionReserveCards();
+
 		window.addEventListener('resize', () => {
 			this.animatingCards.clear();
 			this.positionUI();
@@ -644,12 +653,6 @@ class CardGame {
 		// Flip remaining cards face up so player can see them
 		this.playerHand.forEach(card => this.flipCardFaceUp(card));
 
-		// Computer does the same (random selection)
-		for (let i = 0; i < 3; i++) {
-			const card = this.computerHand.pop()!;
-			this.computerHiddenReserve.push(card);
-		}
-
 		// Computer places visible reserve to give player advantage
 		this.computerMakesVisibleReserve();
 
@@ -889,6 +892,23 @@ class CardGame {
 		this.stack = [];
 	}
 
+	private takeVisibleReserve(hand: Card[]): void {
+		if (hand === this.playerHand) {
+			this.playerVisibleReserve.forEach(placement => {
+				hand.push(...placement.cards);
+			})
+			this.playerVisibleReserve = [];
+		} else {
+			this.computerVisibleReserve.forEach(placement => {
+				placement.cards.forEach(card => this.flipCardFaceDown(card))
+				hand.push(...placement.cards);
+			})
+			this.computerVisibleReserve = [];
+		}
+
+		this.positionCards();
+	}
+
 	private drawToMinimum(hand: Card[]): void {
 		while (hand.length < 3 && this.deck.length > 0) {
 			const card = this.deck.pop()!;
@@ -898,6 +918,10 @@ class CardGame {
 				this.flipCardFaceUp(card);
 
 			hand.push(card);
+		}
+
+		if (hand.length === 0) {
+			this.takeVisibleReserve(hand);
 		}
 
 		if (hand === this.playerHand)
