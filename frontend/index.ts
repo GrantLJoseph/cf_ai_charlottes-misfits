@@ -587,7 +587,7 @@ class CardGame {
 
 		if (placement && this.playerVisibleReserve.length < 3) {
 			this.playButton.visible = true;
-			this.statusText.text = `Valid placement! Click "Play Cards" to add to visible reserve (${this.playerVisibleReserve.length}/3)`;
+			this.statusText.text = `Valid placement! Click "Play Cards" to add to visible reserve.`;
 		} else if (selectedCards.length > 0) {
 			this.playButton.visible = false;
 			this.statusText.text = 'Invalid placement - cards must be same kind or a straight of 3+';
