@@ -72,3 +72,6 @@ There should be a white rectangle the size of a card shown where the deck/stack 
 
 # 14
 Neither the bottom right suit nor rank are correctly positioned. The rank is too far to the right and probably also too far down. The suit is both, being positioned off the bottom right corner of the card.
+
+# 15
+The cards in the deck should actually be physically located in the deck display on screen. This should result in cards moving from the physical deck into the player's hand instead of coming from offscreen. No more artifical card back to represent the deck.

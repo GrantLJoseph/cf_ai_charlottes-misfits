@@ -28,6 +28,7 @@ const CARD_HEIGHT = 168;
 const CARD_RADIUS = 12;
 const CARD_SPACING = 140;
 const UNSELECTED_VISIBLE = 0.5;
+const COMPUTER_HAND_VISIBLE = 0.2;
 const SELECTED_RISE = 80;
 const HOVER_RISE = 10;
 
@@ -124,7 +125,7 @@ class CardGame {
 			this.positionUI();
 			this.positionDeckCards();
 			this.positionStackCards();
-			this.positionCardsImmediate();
+			this.positionCards(true);
 		});
 	}
 
@@ -206,11 +207,11 @@ class CardGame {
 		const screenHeight = this.app.screen.height;
 
 		this.statusText.x = screenWidth / 2;
-		this.statusText.y = 20;
+		this.statusText.y = screenHeight * 0.1;
 
 		// Position deck on the right side of center
 		this.deckContainer.x = screenWidth / 2 + 80;
-		this.deckContainer.y = screenHeight / 2 - CARD_HEIGHT / 2;
+		this.deckContainer.y = screenHeight / 2 - CARD_HEIGHT / 2;``
 
 		// Position stack on the left side of center
 		this.stackContainer.x = screenWidth / 2 - CARD_WIDTH - 80;
@@ -367,24 +368,21 @@ class CardGame {
 		// Sort for display
 		this.sortHand(this.playerHand);
 
-		this.displayPlayerHand();
+		this.positionCards();
 		this.updateDeckDisplay();
 	}
 
-	private displayPlayerHand(): void {
-		// Cards are already on stage, just position them
-		this.positionCards();
-	}
-
 	private handleCardClick(card: Card): void {
-		if (!this.playerHand.includes(card)) return;
-
-		if (this.gamePhase === 'selecting-hidden-reserve') {
-			this.handleHiddenReserveSelection(card);
-		} else if (this.gamePhase === 'selecting-visible-reserve') {
-			this.handleVisibleReserveSelection(card);
-		} else if (this.gamePhase === 'player-turn') {
-			this.handlePlayerTurnSelection(card);
+		if (this.playerHand.includes(card)) {
+			if (this.gamePhase === 'selecting-hidden-reserve') {
+				this.handleHiddenReserveSelection(card);
+			} else if (this.gamePhase === 'selecting-visible-reserve') {
+				this.handleVisibleReserveSelection(card);
+			} else if (this.gamePhase === 'player-turn') {
+				this.handlePlayerTurnSelection(card);
+			}
+		} else if (this.stack.includes(card)) {
+			console.log(`${card.suit} was clicked on stack`);
 		}
 	}
 
@@ -470,19 +468,24 @@ class CardGame {
 		this.playerHiddenReserve = selected;
 		this.playerHand = this.playerHand.filter(c => !c.selected);
 
+		// TODO: Move physically to hidden reserve
+		for (const card of this.playerHiddenReserve) card.container.destroy();
+
 		// Flip remaining cards face up so player can see them
 		this.playerHand.forEach(card => this.flipCardFaceUp(card));
 
 		// Computer does the same (random selection)
 		for (let i = 0; i < 3; i++) {
-			const idx = Math.floor(Math.random() * this.computerHand.length);
-			this.computerHiddenReserve.push(this.computerHand.splice(idx, 1)[0]);
+			const card = this.computerHand.pop()!;
+			this.computerHiddenReserve.push(card);
+			// TODO: Move physically to hidden reserve
+			card.container.destroy();
 		}
 
 		this.gamePhase = 'selecting-visible-reserve';
 		this.playButton.visible = false;
 		this.statusText.text = 'Select cards for visible reserve placement 1/3';
-		this.displayPlayerHand();
+		this.positionCards();
 	}
 
 	private completeVisibleReservePlacement(): void {
@@ -493,6 +496,9 @@ class CardGame {
 
 		this.playerVisibleReserve.push(placement);
 		this.playerHand = this.playerHand.filter(c => !c.selected);
+
+		// TODO physically move cards to visible reserve
+		for (const card of selected) card.container.destroy();
 
 		// Draw back to 3 if needed
 		this.drawToMinimum(this.playerHand);
@@ -509,7 +515,7 @@ class CardGame {
 		}
 
 		this.playButton.visible = false;
-		this.displayPlayerHand();
+		this.positionCards();
 		this.updateDeckDisplay();
 	}
 
@@ -519,12 +525,7 @@ class CardGame {
 
 		if (!placement || !this.canPlayOnStack(placement)) return;
 
-		// Add cards to stack and animate them to stack position
-		placement.cards.forEach(card => {
-			this.stack.push(card);
-			this.animateCard(card.container, this.stackContainer.x, this.stackContainer.y);
-			this.flipCardFaceUp(card);
-		});
+		this.playOnStack(placement);
 		this.playerHand = this.playerHand.filter(c => !c.selected);
 
 		this.drawToMinimum(this.playerHand);
@@ -546,7 +547,7 @@ class CardGame {
 		}
 
 		this.playButton.visible = false;
-		this.displayPlayerHand();
+		this.positionCards();
 		this.updateStackDisplay();
 		this.updateDeckDisplay();
 	}
@@ -559,6 +560,9 @@ class CardGame {
 			// Try to make a valid placement
 			const card = this.computerHand.pop()!;
 			this.computerVisibleReserve.push({ cards: [card], type: 'single' });
+
+			// TODO: Move physically to visible reserve
+			card.container.destroy();
 
 			this.drawToMinimum(this.computerHand);
 		}
@@ -577,11 +581,11 @@ class CardGame {
 				const placement = { cards: [card], type: 'single' as const };
 
 				if (this.canPlayOnStack(placement)) {
-					this.stack.push(card);
+					this.playOnStack(placement);
 					this.statusText.text = 'Computer played from hidden reserve';
 				} else {
-					this.computerHand.push(card, ...this.stack);
-					this.stack = [];
+					this.takeStack(this.computerHand);
+					this.computerHand.push(card);
 					this.statusText.text = 'Computer picked up stack';
 				}
 
@@ -598,7 +602,7 @@ class CardGame {
 			const placement = { cards: [card], type: 'single' as const };
 
 			if (this.canPlayOnStack(placement)) {
-				this.stack.push(card);
+				this.playOnStack(placement);
 				this.computerHand.splice(i, 1);
 				played = true;
 
@@ -617,8 +621,7 @@ class CardGame {
 
 		if (!played) {
 			// Pick up stack
-			this.computerHand.push(...this.stack);
-			this.stack = [];
+			this.takeStack(this.computerHand);
 			this.statusText.text = 'Computer picked up the stack';
 		} else {
 			this.drawToMinimum(this.computerHand);
@@ -672,19 +675,45 @@ class CardGame {
 		return lowestCard.rank >= topCard.rank;
 	}
 
+	private playOnStack(placement: Placement): void {
+		// Add cards to stack and animate them to stack position
+		placement.cards.forEach(card => {
+			this.stack.push(card);
+			this.flipCardFaceUp(card);
+			this.animateCard(card.container, this.stackContainer.x, this.stackContainer.y);
+		});
+
+		let z = 0;
+		this.stack.forEach(card => card.container.zIndex = z++);
+	}
+
+	private takeStack(hand: Card[]): void {
+		hand.push(...this.stack);
+
+		if (hand === this.computerHand) {
+			this.stack.forEach(card => this.flipCardFaceDown(card));
+		}
+
+		this.stack = [];
+
+		this.positionCards();
+	}
+
 	private drawToMinimum(hand: Card[]): void {
 		while (hand.length < 3 && this.deck.length > 0) {
 			const card = this.deck.pop()!;
 
 			// If this is the player's hand, flip the card face up
-			if (hand === this.playerHand) {
+			if (hand === this.playerHand)
 				this.flipCardFaceUp(card);
-			}
 
 			hand.push(card);
 		}
 
-		this.sortHand(hand);
+		if (hand === this.playerHand)
+			this.sortHand(hand);
+
+		this.positionCards();
 	}
 
 	private checkWinCondition(): boolean {
@@ -787,43 +816,43 @@ class CardGame {
 		});
 	}
 
-	private positionCards(): void {
+	private positionCards(immediate = false): void {
 		const screenWidth = this.app.screen.width;
 		const screenHeight = this.app.screen.height;
 
-		const totalWidth = (this.playerHand.length - 1) * CARD_SPACING + CARD_WIDTH;
-		const startX = (screenWidth - totalWidth) / 2;
-		const baseY = screenHeight - CARD_HEIGHT * UNSELECTED_VISIBLE;
+		const playerTotalWidth = (this.playerHand.length - 1) * CARD_SPACING + CARD_WIDTH;
+		const playerStartX = (screenWidth - playerTotalWidth) / 2;
+		const playerBaseY = screenHeight - CARD_HEIGHT * UNSELECTED_VISIBLE;
 
 		this.playerHand.forEach((card, index) => {
-			const targetX = startX + index * CARD_SPACING;
-			let targetY = baseY;
+			const targetX = playerStartX + index * CARD_SPACING;
+			let targetY = playerBaseY;
 			if (card.selected) targetY -= SELECTED_RISE;
 			else if (card.hovered) targetY -= HOVER_RISE;
 
-			this.animateCard(card.container, targetX, targetY);
-		});
-	}
-
-	private positionCardsImmediate(): void {
-		const screenWidth = this.app.screen.width;
-		const screenHeight = this.app.screen.height;
-
-		const totalWidth = (this.playerHand.length - 1) * CARD_SPACING + CARD_WIDTH;
-		const startX = (screenWidth - totalWidth) / 2;
-		const baseY = screenHeight - CARD_HEIGHT * UNSELECTED_VISIBLE;
-
-		this.playerHand.forEach((card, index) => {
-			const targetX = startX + index * CARD_SPACING;
-			let targetY = baseY;
-			if (card.selected) targetY -= SELECTED_RISE;
-			else if (card.hovered) targetY -= HOVER_RISE;
-
-			card.container.x = targetX;
-			card.container.y = targetY;
+			if (immediate) {
+				card.container.x = targetX;
+				card.container.y = targetY;
+			} else {
+				this.animateCard(card.container, targetX, targetY);
+			}
 		});
 
-		this.positionUI();
+		const computerTotalWidth = (this.computerHand.length - 1) * CARD_SPACING + CARD_WIDTH;
+		const computerStartX = (screenWidth - computerTotalWidth) / 2;
+		const computerBaseY = -CARD_HEIGHT * (1 - COMPUTER_HAND_VISIBLE);
+
+		this.computerHand.forEach((card, index) => {
+			const targetX = computerStartX + index * CARD_SPACING;
+			let targetY = computerBaseY;
+
+			if (immediate) {
+				card.container.x = targetX;
+				card.container.y = targetY;
+			} else {
+				this.animateCard(card.container, targetX, targetY);
+			}
+		})
 	}
 
 	private animateCard(container: Container, targetX: number, targetY: number): void {
