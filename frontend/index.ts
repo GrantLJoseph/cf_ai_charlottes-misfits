@@ -89,6 +89,31 @@ class Chat {
 	}
 }
 
+// Serializable card representation (without PixiJS container)
+interface SerializedCard {
+	suit: 'hearts' | 'diamonds' | 'clubs' | 'spades';
+	rank: number;
+	id: string;
+}
+
+interface SerializedPlacement {
+	cards: SerializedCard[];
+	type: 'single' | 'multiple' | 'straight';
+}
+
+// Complete game state for server sync
+interface GameState {
+	deck: SerializedCard[];
+	stack: SerializedCard[];
+	playerHand: SerializedCard[];
+	playerHiddenReserve: SerializedCard[];
+	playerVisibleReserve: SerializedPlacement[];
+	computerHand: SerializedCard[];
+	computerHiddenReserve: SerializedCard[];
+	computerVisibleReserve: SerializedPlacement[];
+	gamePhase: GamePhase;
+}
+
 // Card data structures
 interface Card {
 	suit: 'hearts' | 'diamonds' | 'clubs' | 'spades';
@@ -228,6 +253,9 @@ class CardGame {
 	private app: Application;
 	private animatingCards: Map<Container, number> = new Map();
 
+	private socket: WebSocket;
+	private stateLoaded: boolean = false;
+
 	// Game state
 	private deck: Card[] = [];
 	private stack: Card[] = [];
@@ -267,6 +295,203 @@ class CardGame {
 		this.stackContainer = new Container();
 		this.leftScrollArrow = new Container();
 		this.rightScrollArrow = new Container();
+		this.socket = new WebSocket("/game-data");
+	}
+
+	private handleSocketOpen(): void {
+		this.socket.send(JSON.stringify({ type: 'state-get' }));
+	}
+
+	private handleSocketMessage(event: MessageEvent): void {
+		const data = JSON.parse(event.data);
+
+		switch (data.type) {
+			case 'state-load':
+				this.loadGameState(data.state);
+				this.stateLoaded = true;
+				this.setupResizeHandler();
+				addChatMessage('Game restored from previous session.');
+				break;
+			case 'state-none':
+				this.startNewGame();
+				this.stateLoaded = true;
+				this.setupResizeHandler();
+				addChatMessage('Hello, World! Welcome to the card game.');
+				break;
+			case 'state-saved':
+				console.log('Game state saved to server');
+				break;
+			case 'state-cleared':
+				console.log('Game state cleared from server');
+				break;
+		}
+	}
+
+	private setupResizeHandler(): void {
+		window.addEventListener('resize', () => {
+			this.animatingCards.clear();
+			this.positionUI();
+			this.positionDeckCards();
+			this.positionStackCards();
+			this.positionReserveCards(true);
+			this.positionCards(true);
+		});
+	}
+
+	// Serialize a card for storage (strip PixiJS container)
+	private serializeCard(card: Card): SerializedCard {
+		return {
+			suit: card.suit,
+			rank: card.rank,
+			id: card.id
+		};
+	}
+
+	// Serialize a placement
+	private serializePlacement(placement: Placement): SerializedPlacement {
+		return {
+			cards: placement.cards.map(c => this.serializeCard(c)),
+			type: placement.type
+		};
+	}
+
+	// Get the current game state for saving
+	private getGameState(): GameState {
+		return {
+			deck: this.deck.map(c => this.serializeCard(c)),
+			stack: this.stack.map(c => this.serializeCard(c)),
+			playerHand: this.playerHand.map(c => this.serializeCard(c)),
+			playerHiddenReserve: this.playerHiddenReserve.map(c => this.serializeCard(c)),
+			playerVisibleReserve: this.playerVisibleReserve.map(p => this.serializePlacement(p)),
+			computerHand: this.computerHand.map(c => this.serializeCard(c)),
+			computerHiddenReserve: this.computerHiddenReserve.map(c => this.serializeCard(c)),
+			computerVisibleReserve: this.computerVisibleReserve.map(p => this.serializePlacement(p)),
+			gamePhase: this.gamePhase
+		};
+	}
+
+	// Save current state to server
+	private saveGameState(): void {
+		if (this.socket.readyState === WebSocket.OPEN) {
+			const state = this.getGameState();
+			this.socket.send(JSON.stringify({ type: 'state-update', state }));
+		}
+	}
+
+	// Clear state on server (called when game ends)
+	private clearGameState(): void {
+		if (this.socket.readyState === WebSocket.OPEN) {
+			this.socket.send(JSON.stringify({ type: 'state-clear' }));
+		}
+	}
+
+	// Rebuild a card from serialized data
+	private deserializeCard(serialized: SerializedCard, faceDown: boolean): Card {
+		const container = this.createCardContainer(serialized.suit, serialized.rank, faceDown);
+		const card: Card = {
+			suit: serialized.suit,
+			rank: serialized.rank,
+			id: serialized.id,
+			container,
+			selected: false,
+			hovered: false
+		};
+
+		container.on('pointerdown', () => this.handleCardClick(card));
+		container.on('pointerover', () => this.handleCardHover(card, true));
+		container.on('pointerout', () => this.handleCardHover(card, false));
+
+		this.app.stage.addChild(card.container);
+
+		return card;
+	}
+
+	// Rebuild a placement from serialized data
+	private deserializePlacement(serialized: SerializedPlacement, faceDown: boolean): Placement {
+		return {
+			cards: serialized.cards.map(c => this.deserializeCard(c, faceDown)),
+			type: serialized.type
+		};
+	}
+
+	// Load game state from server
+	private loadGameState(state: GameState): void {
+		// Clear existing cards from stage
+		this.deck.forEach(c => c.container.destroy());
+		this.stack.forEach(c => c.container.destroy());
+		this.playerHand.forEach(c => c.container.destroy());
+		this.playerHiddenReserve.forEach(c => c.container.destroy());
+		this.playerVisibleReserve.forEach(p => p.cards.forEach(c => c.container.destroy()));
+		this.computerHand.forEach(c => c.container.destroy());
+		this.computerHiddenReserve.forEach(c => c.container.destroy());
+		this.computerVisibleReserve.forEach(p => p.cards.forEach(c => c.container.destroy()));
+
+		// Rebuild cards from state
+		// Deck cards are always face down
+		this.deck = state.deck.map(c => this.deserializeCard(c, true));
+
+		// Stack cards are always face up
+		this.stack = state.stack.map(c => this.deserializeCard(c, false));
+
+		// Player hand is face up (after initial selection phase)
+		const playerHandFaceDown = state.gamePhase === 'selecting-hidden-reserve';
+		this.playerHand = state.playerHand.map(c => this.deserializeCard(c, playerHandFaceDown));
+
+		// Player hidden reserve is face down
+		this.playerHiddenReserve = state.playerHiddenReserve.map(c => this.deserializeCard(c, true));
+
+		// Player visible reserve is face up
+		this.playerVisibleReserve = state.playerVisibleReserve.map(p => this.deserializePlacement(p, false));
+
+		// Computer hand is always face down from player's perspective
+		this.computerHand = state.computerHand.map(c => this.deserializeCard(c, true));
+
+		// Computer hidden reserve is face down
+		this.computerHiddenReserve = state.computerHiddenReserve.map(c => this.deserializeCard(c, true));
+
+		// Computer visible reserve is face up
+		this.computerVisibleReserve = state.computerVisibleReserve.map(p => this.deserializePlacement(p, false));
+
+		// Restore game phase
+		this.gamePhase = state.gamePhase;
+
+		// Update UI based on phase
+		this.updateUIForPhase();
+
+		// Position everything
+		this.positionDeckCards();
+		this.positionStackCards();
+		this.positionCards();
+		this.positionReserveCards();
+		this.updateDeckDisplay();
+		this.updateStackDisplay();
+	}
+
+	// Update UI elements based on current game phase
+	private updateUIForPhase(): void {
+		this.playButton.visible = false;
+
+		switch (this.gamePhase) {
+			case 'selecting-hidden-reserve':
+				this.updateStatus('Select 3 cards for your hidden reserve (0/3)', false);
+				break;
+			case 'selecting-visible-reserve':
+				this.updateStatus(`Select cards for visible reserve placement ${this.playerVisibleReserve.length + 1}/3`, false);
+				break;
+			case 'player-turn':
+				if (this.playerHand.length > 0)
+					this.updateStatus('Your turn - select cards to play', false);
+				else
+					this.updateStatus('Your turn - select a hidden reserve card', false);
+				break;
+			case 'computer-turn':
+				this.updateStatus('Computer is thinking...', false);
+				setTimeout(() => this.computerTurn(), 1000);
+				break;
+			case 'game-over':
+				// Don't change status, it should already show win/lose
+				break;
+		}
 	}
 
 	async init(): Promise<void> {
@@ -293,10 +518,16 @@ class CardGame {
 		this.createPlayButton();
 		this.createScrollArrows();
 
-		this.initializeDeck();
 		this.positionUI();
 
-		// Position all deck cards at deck location
+		// Connect to server - game initialization happens in handleSocketMessage
+		this.socket.addEventListener("open", () => this.handleSocketOpen());
+		this.socket.addEventListener("message", (event) => this.handleSocketMessage(event));
+	}
+
+	private startNewGame(): void {
+		// Initialize deck only for new games
+		this.initializeDeck();
 		this.positionDeckCards();
 
 		this.dealInitialCards();
@@ -309,18 +540,6 @@ class CardGame {
 
 		this.positionCards();
 		this.positionReserveCards();
-
-		window.addEventListener('resize', () => {
-			this.animatingCards.clear();
-			this.positionUI();
-			this.positionDeckCards();
-			this.positionStackCards();
-			this.positionReserveCards(true);
-			this.positionCards(true);
-		});
-
-		// Send hello world message to test the chat system
-		addChatMessage('Hello, World! Welcome to the card game.');
 	}
 
 	private updateStatus(text: string, logToChat: boolean): void {
@@ -730,6 +949,7 @@ class CardGame {
 				this.updateStackDisplay();
 				this.positionCards();
 
+				this.saveGameState();
 				this.startComputerTurn();
 			// Drawing from hidden reserve
 			} else if (this.playerHand.length == 0 && this.deck.length == 0 && this.playerVisibleReserve.length == 0 && this.playerHiddenReserve.includes(card)) {
@@ -737,6 +957,7 @@ class CardGame {
 				this.flipCardFaceUp(card);
 				this.playerHiddenReserve = this.playerHiddenReserve.filter(c => c !== card);
 				this.positionCards();
+				this.saveGameState();
 			}
 		}
 	}
@@ -841,6 +1062,8 @@ class CardGame {
 		// Position all cards including new reserve cards
 		this.positionCards();
 		this.positionReserveCards();
+
+		this.saveGameState();
 	}
 
 	private completeVisibleReservePlacement(): void {
@@ -868,6 +1091,8 @@ class CardGame {
 		this.positionCards();
 		this.positionReserveCards();
 		this.updateDeckDisplay();
+
+		this.saveGameState();
 	}
 
 	private playSelectedCards(): void {
@@ -898,6 +1123,8 @@ class CardGame {
 		this.positionCards();
 		this.updateStackDisplay();
 		this.updateDeckDisplay();
+
+		this.saveGameState();
 	}
 
 	private computerMakesVisibleReserve(): void {
@@ -1002,6 +1229,8 @@ class CardGame {
 		this.gamePhase = 'player-turn';
 		this.updateStackDisplay();
 		this.updateDeckDisplay();
+
+		this.saveGameState();
 	}
 
 	private validatePlacement(cards: Card[]): Placement | null {
@@ -1123,6 +1352,7 @@ class CardGame {
 			this.gamePhase = 'game-over';
 			this.updateStatus('You win! 🎉', true);
 			this.playButton.visible = false;
+			this.clearGameState();
 			return true;
 		}
 
@@ -1133,6 +1363,7 @@ class CardGame {
 			this.gamePhase = 'game-over';
 			this.updateStatus('Computer wins! 💔', true);
 			this.playButton.visible = false;
+			this.clearGameState();
 			return true;
 		}
 

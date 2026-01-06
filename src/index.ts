@@ -1,10 +1,44 @@
 import bcrypt from "bcryptjs";
+import { DurableObject } from "cloudflare:workers";
 import {loginPageHtml} from "./page_templates";
 
 export interface Env {
 	KV: KVNamespace;
 	SKIP_AUTH: boolean;
 	ASSETS: Fetcher;
+	GAME_DATA_SERVER: DurableObjectNamespace<GameDataServer>;
+}
+
+// Serializable card representation (without PixiJS container)
+interface SerializedCard {
+	suit: 'hearts' | 'diamonds' | 'clubs' | 'spades';
+	rank: number;
+	id: string;
+}
+
+interface SerializedPlacement {
+	cards: SerializedCard[];
+	type: 'single' | 'multiple' | 'straight';
+}
+
+type GamePhase =
+	| 'selecting-hidden-reserve'
+	| 'selecting-visible-reserve'
+	| 'player-turn'
+	| 'computer-turn'
+	| 'game-over';
+
+// Complete game state that gets persisted
+interface GameState {
+	deck: SerializedCard[];
+	stack: SerializedCard[];
+	playerHand: SerializedCard[];
+	playerHiddenReserve: SerializedCard[];
+	playerVisibleReserve: SerializedPlacement[];
+	computerHand: SerializedCard[];
+	computerHiddenReserve: SerializedCard[];
+	computerVisibleReserve: SerializedPlacement[];
+	gamePhase: GamePhase;
 }
 
 // Generate a simple session token
@@ -130,6 +164,93 @@ export default {
 
 		// All routes are authenticated from here down
 
+		if (pathname === '/game-data') {
+			const sessionToken = getSessionFromCookie(request);
+			const username = (await env.KV.get(`session:${sessionToken}`))!;
+
+			// Expect to receive a WebSocket Upgrade request.
+			// If there is one, accept the request and return a WebSocket Response.
+			const upgradeHeader = request.headers.get('Upgrade');
+			if (!upgradeHeader || upgradeHeader !== 'websocket') {
+				return new Response('Worker expected Upgrade: websocket', {
+					status: 426,
+				});
+			}
+
+			if (request.method !== 'GET') {
+				return new Response('Expected GET method', {
+					status: 400,
+				});
+			}
+
+			let id = env.GAME_DATA_SERVER.idFromName('username');
+			let gameDataServer = env.GAME_DATA_SERVER.get(id);
+
+			return gameDataServer.fetch(request);
+		}
+
 		return env.ASSETS.fetch(request);
 	}
 };
+
+export class GameDataServer extends DurableObject {
+	connected: Boolean = false;
+	state: GameState | null = null;
+
+	constructor(ctx: DurableObjectState, env: Env) {
+		super(ctx, env);
+	}
+
+	async fetch(request: Request): Promise<Response> {
+		if (this.connected) return new Response('Already connected', { status: 400 });
+
+		const webSocketPair = new WebSocketPair();
+		const [client, server] = Object.values(webSocketPair);
+
+		this.ctx.acceptWebSocket(server);
+
+		return new Response(null, {
+			status: 101,
+			webSocket: client,
+		});
+	}
+
+	async webSocketMessage(ws: WebSocket, message: ArrayBuffer | string) {
+		const data = JSON.parse(message.toString());
+
+		console.log(`Received message: ${data.type}`);
+
+		switch (data.type) {
+			case 'state-get': {
+				const state = this.state ?? await this.ctx.storage.get<GameState>('gameState');
+				if (state) {
+					ws.send(JSON.stringify({ type: 'state-load', state }));
+				} else {
+					ws.send(JSON.stringify({ type: 'state-none' }));
+				}
+				break;
+			}
+			case 'state-update': {
+				this.state = data.state;
+				await this.ctx.storage.put('gameState', this.state);
+				ws.send(JSON.stringify({ type: 'state-saved' }));
+				break;
+			}
+			case 'state-clear': {
+				this.state = null;
+				await this.ctx.storage.delete('gameState');
+				ws.send(JSON.stringify({ type: 'state-cleared' }));
+				break;
+			}
+		}
+	}
+
+	async webSocketClose(
+		ws: WebSocket,
+		code: number,
+		reason: string,
+		wasClean: boolean,
+	) {
+		ws.close(code, "Durable Object is closing WebSocket");
+	}
+}

@@ -115,3 +115,15 @@ Look at my files, not what you sent. The chat isn't opening when I press the but
 
 # 25
 All the HTML elements gotten in the ChatSystem constructor are null.
+
+# 26
+How is this.socket undefined in handleSocketOpen? The function should only be called after the socket is created and the connection is established.
+
+# 27
+Finish the websocket state storage and transfer in src/index.ts (Cloudflare Durable Object) and frontend/index.ts.
+
+Just the visible state should be synced between the client and server. This includes the player and computer's hands, the stack, the deck, and the reserves.
+
+Loading the game state from the server's data only occurs on page load, not while playing. Update the server state on every move played so that the user can at any time log out and come back.
+
+When the game ends, clear the state on the server. The end win/lose screen does not need to sync.
