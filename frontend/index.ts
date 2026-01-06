@@ -1,5 +1,94 @@
 import { Application, Container, Graphics, Text, TextStyle, FederatedPointerEvent } from 'pixi.js';
 
+class Chat {
+	private popup: HTMLElement;
+	private messagesContainer: HTMLElement;
+	private input: HTMLInputElement;
+	private sendButton: HTMLElement;
+	private toggleButton: HTMLElement;
+	private closeButton: HTMLElement;
+	private notificationDot: HTMLElement;
+	private isOpen: boolean = false;
+
+	constructor() {
+		this.popup = document.getElementById('chat-popup')!;
+		this.messagesContainer = document.getElementById('chat-messages')!;
+		this.input = document.getElementById('chat-input') as HTMLInputElement;
+		this.sendButton = document.getElementById('chat-send')!;
+		this.toggleButton = document.getElementById('chat-toggle')!;
+		this.closeButton = document.getElementById('chat-close')!;
+		this.notificationDot = document.getElementById('chat-notification')!;
+
+		this.setupEventListeners();
+	}
+
+	private setupEventListeners(): void {
+		this.toggleButton.addEventListener('click', () => this.toggle());
+		this.closeButton.addEventListener('click', () => this.close());
+		this.sendButton.addEventListener('click', () => this.sendPlayerMessage());
+		this.input.addEventListener('keydown', (e) => {
+			if (e.key === 'Enter') {
+				this.sendPlayerMessage();
+			}
+		});
+	}
+
+	toggle(): void {
+		if (this.isOpen) {
+			this.close();
+		} else {
+			this.open();
+		}
+	}
+
+	open(): void {
+		this.isOpen = true;
+		this.popup.classList.remove('chat-hidden');
+		this.clearNotification();
+		this.scrollToBottom();
+	}
+
+	close(): void {
+		this.isOpen = false;
+		this.popup.classList.add('chat-hidden');
+	}
+
+	private clearNotification(): void {
+		this.notificationDot.classList.remove('visible');
+	}
+
+	private showNotification(): void {
+		if (!this.isOpen) {
+			this.notificationDot.classList.add('visible');
+		}
+	}
+
+	private scrollToBottom(): void {
+		this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
+	}
+
+	private sendPlayerMessage(): void {
+		const text = this.input.value.trim();
+		if (!text) return;
+
+		this.addMessage(text, 'player');
+		this.input.value = '';
+	}
+
+	addMessage(text: string, type: 'system' | 'player' = 'system'): void {
+		const messageEl = document.createElement('div');
+		messageEl.className = `chat-message ${type}`;
+		messageEl.textContent = text;
+		this.messagesContainer.appendChild(messageEl);
+
+		if (type === 'system') {
+			this.showNotification();
+		}
+
+		this.scrollToBottom();
+	}
+}
+
 // Card data structures
 interface Card {
 	suit: 'hearts' | 'diamonds' | 'clubs' | 'spades';
@@ -58,6 +147,83 @@ function rankToString(rank: number): string {
 	return rank.toString();
 }
 
+// Initialize chat system
+let chatSystem;
+
+// Chat system
+let chatOpen = false;
+let hasUnreadMessages = false;
+
+export function addChatMessage(message: string, type: 'system' | 'player' = 'system'): void {
+	const messagesContainer = document.getElementById('chat-messages');
+	if (!messagesContainer) return;
+
+	const messageEl = document.createElement('div');
+	messageEl.className = `chat-message ${type}`;
+	messageEl.textContent = message;
+	messagesContainer.appendChild(messageEl);
+
+	// Auto-scroll to bottom
+	messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+	// Show notification dot if chat is closed and it's a system message
+	if (!chatOpen && type === 'system') {
+		hasUnreadMessages = true;
+		const notificationDot = document.getElementById('chat-notification');
+		if (notificationDot) {
+			notificationDot.classList.add('visible');
+		}
+	}
+}
+
+function initChat(): void {
+	const chatToggle = document.getElementById('chat-toggle');
+	const chatPopup = document.getElementById('chat-popup');
+	const chatClose = document.getElementById('chat-close');
+	const chatInput = document.getElementById('chat-input') as HTMLInputElement;
+	const chatSend = document.getElementById('chat-send');
+	const notificationDot = document.getElementById('chat-notification');
+
+	if (!chatToggle || !chatPopup || !chatClose || !chatInput || !chatSend) return;
+
+	// Toggle chat
+	chatToggle.addEventListener('click', () => {
+		chatOpen = !chatOpen;
+		chatPopup.classList.toggle('chat-hidden', !chatOpen);
+
+		if (chatOpen) {
+			// Clear notification
+			hasUnreadMessages = false;
+			if (notificationDot) {
+				notificationDot.classList.remove('visible');
+			}
+			chatInput.focus();
+		}
+	});
+
+	// Close button
+	chatClose.addEventListener('click', () => {
+		chatOpen = false;
+		chatPopup.classList.add('chat-hidden');
+	});
+
+	// Send message
+	const sendMessage = () => {
+		const message = chatInput.value.trim();
+		if (message) {
+			addChatMessage(message, 'player');
+			chatInput.value = '';
+		}
+	};
+
+	chatSend.addEventListener('click', sendMessage);
+	chatInput.addEventListener('keypress', (e) => {
+		if (e.key === 'Enter') {
+			sendMessage();
+		}
+	});
+}
+
 class CardGame {
 	private app: Application;
 	private animatingCards: Map<Container, number> = new Map();
@@ -110,6 +276,8 @@ class CardGame {
 			antialias: true,
 		});
 
+		initChat();
+
 		const container = document.getElementById('game-container');
 		if (!container) throw Error('Cannot get game container');
 		container.appendChild(this.app.canvas);
@@ -150,6 +318,17 @@ class CardGame {
 			this.positionReserveCards(true);
 			this.positionCards(true);
 		});
+
+		// Send hello world message to test the chat system
+		addChatMessage('Hello, World! Welcome to the card game.');
+	}
+
+	private updateStatus(text: string, logToChat: boolean): void {
+		if (logToChat && text != this.statusText.text) {
+			addChatMessage(text, 'system');
+		}
+
+		this.statusText.text = text;
 	}
 
 	private createScrollArrows(): void {
@@ -569,10 +748,10 @@ class CardGame {
 
 		if (selectedCount === 3) {
 			this.playButton.visible = true;
-			this.statusText.text = 'Click "Play Cards" to confirm your hidden reserve';
+			this.updateStatus('Click "Play Cards" to confirm your hidden reserve', false)
 		} else {
 			this.playButton.visible = false;
-			this.statusText.text = `Select 3 cards for your hidden reserve (${selectedCount}/3)`;
+			this.updateStatus(`Select 3 cards for your hidden reserve (${selectedCount}/3)`, false)
 		}
 
 		this.positionCards();
@@ -587,13 +766,13 @@ class CardGame {
 
 		if (placement && this.playerVisibleReserve.length < 3) {
 			this.playButton.visible = true;
-			this.statusText.text = `Valid placement! Click "Play Cards" to add to visible reserve.`;
+			this.updateStatus(`Valid placement! Click "Play Cards" to add to visible reserve.`, false)
 		} else if (selectedCards.length > 0) {
 			this.playButton.visible = false;
-			this.statusText.text = 'Invalid placement - cards must be same kind or a straight of 3+';
+			this.updateStatus(`Invalid placement - cards must be same kind or a straight of 3+`, false)
 		} else {
 			this.playButton.visible = false;
-			this.statusText.text = `Select cards for visible reserve placement ${this.playerVisibleReserve.length + 1}/3`;
+			this.updateStatus(`Select cards for visible reserve placement ${this.playerVisibleReserve.length + 1}/3`, false)
 		}
 	}
 
@@ -606,17 +785,17 @@ class CardGame {
 
 		if (placement && this.canPlayOnStack(placement)) {
 			this.playButton.visible = true;
-			this.statusText.text = 'Valid play! Click "Play Cards" to place on stack.';
+			this.updateStatus(`Valid play! Click "Play Cards" to place on stack.`, false);
 		} else if (selectedCards.length > 0 && placement) {
 			this.playButton.visible = false;
-			this.statusText.text = 'Cannot play - cards too low for current stack';
+			this.updateStatus(`Cannot play - cards too low for current stack.`, false);
 		} else if (selectedCards.length > 0) {
 			this.playButton.visible = false;
-			this.statusText.text = 'Invalid placement - cards must be same suit or a straight of 3+';
+			this.updateStatus(`Invalid placement - cards must be same suit or a straight of 3+`, false);
 		} else {
 			this.playButton.visible = false;
 			const pickupOption = this.stack.length > 0 ? ' or take the stack' : '';
-			this.statusText.text = `Your turn - select cards to play${pickupOption}`;
+			this.updateStatus(`Your turn - select cards to play${pickupOption}`, false);
 		}
 	}
 
@@ -657,7 +836,7 @@ class CardGame {
 
 		this.gamePhase = 'selecting-visible-reserve';
 		this.playButton.visible = false;
-		this.statusText.text = 'Select cards for visible reserve placement 1/3';
+		this.updateStatus('Select cards for visible reserve placement 1/3', true);
 
 		// Position all cards including new reserve cards
 		this.positionCards();
@@ -682,7 +861,7 @@ class CardGame {
 		if (this.playerVisibleReserve.length === 3) {
 			this.startPlayerTurn();
 		} else {
-			this.statusText.text = `Select cards for visible reserve placement ${this.playerVisibleReserve.length + 1}/3`;
+			this.updateStatus(`Select cards for visible reserve placement ${this.playerVisibleReserve.length + 1}/3`, false);
 		}
 
 		this.playButton.visible = false;
@@ -706,7 +885,7 @@ class CardGame {
 		const hasAce = placement.cards.some(c => c.rank === 14);
 		if (hasAce) {
 			this.discardStack();
-			this.statusText.text = 'Ace! Stack cleared. Play again!';
+			this.updateStatus('Ace! Stack cleared. Play again!', true);
 			// Player goes again - stay in player-turn phase
 		} else {
 			// Check if player is out of cards
@@ -742,14 +921,12 @@ class CardGame {
 	}
 
 	private startPlayerTurn(): void {
-		console.log(this.playerHand);
-
 		this.gamePhase = 'player-turn';
 
 		if (this.playerHand.length > 0)
-			this.statusText.text = 'Your turn - select cards to play';
+			this.updateStatus('Your turn - select cards to play', true);
 		else
-			this.statusText.text = 'Your turn - select a hidden reserve card';
+			this.updateStatus('Your turn - select a hidden reserve card', true);
 	}
 
 	private startComputerTurn(): void {
@@ -758,29 +935,27 @@ class CardGame {
 	}
 
 	private computerTurn(): void {
+		this.drawToMinimum(this.computerHand);
+
 		// Stub: computer tries to play a random card or picks up stack
 		if (this.computerHand.length === 0) {
 			// Computer needs to use visible reserve
 			if (this.computerVisibleReserve.length > 0) {
-				const placement = this.computerVisibleReserve.pop()!;
-				this.computerHand.push(...placement.cards);
+				this.computerVisibleReserve.forEach(placement => {
+					this.computerHand.push(...placement.cards);
+					this.computerVisibleReserve = [];
+					this.updateStatus("Computer took their visible reserve", true);
+				});
 			} else if (this.computerHiddenReserve.length > 0) {
 				// Use hidden reserve
 				const card = this.computerHiddenReserve.pop()!;
 				const placement = { cards: [card], type: 'single' as const };
 
-				if (this.canPlayOnStack(placement)) {
-					this.playOnStack(placement);
-					this.statusText.text = 'Computer played from hidden reserve';
-				} else {
-					this.takeStack(this.computerHand);
-					this.computerHand.push(card);
-					this.statusText.text = 'Computer picked up stack';
-				}
+				this.computerHand.push(...placement.cards);
 
-				this.startPlayerTurn();
+				this.updateStatus("Computer drew from hidden reserve", true);
 				this.updateStackDisplay();
-				return;
+				this.positionCards();
 			}
 		}
 
@@ -801,6 +976,9 @@ class CardGame {
 
 					this.stack = [];
 					// Computer goes again
+
+					this.updateStatus('Computer played Ace! Stack cleared. They play again.', true);
+
 					setTimeout(() => this.computerTurn(), 1000);
 					return;
 				}
@@ -809,17 +987,17 @@ class CardGame {
 			}
 		}
 
-		if (!played) {
-			// Pick up stack
-			this.takeStack(this.computerHand);
-			this.statusText.text = 'Computer picked up the stack';
-		} else {
-			this.drawToMinimum(this.computerHand);
-			this.statusText.text = 'Computer played a card';
-		}
-
 		// Check win condition
 		if (this.checkWinCondition()) return;
+
+		if (!played) {
+			// Pick up stac
+			this.takeStack(this.computerHand);
+			this.updateStatus('Computer picked up the stack', true);
+		} else {
+			this.drawToMinimum(this.computerHand);
+			this.updateStatus('Computer played a card', true);
+		}
 
 		this.gamePhase = 'player-turn';
 		this.updateStackDisplay();
@@ -889,7 +1067,6 @@ class CardGame {
 
 		if (hand === this.playerHand) {
 			this.sortHand(hand);
-			console.log('Sorted hand:', hand);
 		}
 
 		this.positionCards();
@@ -944,7 +1121,8 @@ class CardGame {
 			this.playerVisibleReserve.length === 0 &&
 			this.playerHiddenReserve.length === 0) {
 			this.gamePhase = 'game-over';
-			this.statusText.text = 'You win!';
+			this.updateStatus('You win! 🎉', true);
+			this.playButton.visible = false;
 			return true;
 		}
 
@@ -953,7 +1131,8 @@ class CardGame {
 			this.computerVisibleReserve.length === 0 &&
 			this.computerHiddenReserve.length === 0) {
 			this.gamePhase = 'game-over';
-			this.statusText.text = 'Computer wins!';
+			this.updateStatus('Computer wins! 💔', true);
+			this.playButton.visible = false;
 			return true;
 		}
 
@@ -1193,5 +1372,9 @@ class CardGame {
 	}
 }
 
-const game = new CardGame();
-game.init().catch(console.error);
+document.addEventListener("DOMContentLoaded", function() {
+	chatSystem = new Chat();
+
+	const game = new CardGame();
+	game.init().catch(console.error);
+});

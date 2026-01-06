@@ -97,3 +97,21 @@ Make sure you are familiar with the game rules in rules.md. Currently, the playe
 When the player selects their 3 hidden reserve cards, those cards should move to a horizontal row on the right side, staying face down. Each of the three visible reserve placements should be placed on top of one of these three hidden reserve cards (one placement per hidden reserve card). Since visible reserve placements can contain more than one card apiece, the cards within the placement should be stacked on top of each other downward. Each card except for the top, lowermost card should have just enough showing to see the suit and rank in the upper left corner of the card.
 
 The computer's reserves should be essentially the same and not rotated away from the player.
+
+# 22
+The game content is currently fullscreen. Add a bar at the bottom of the page that's thick enough for some text and buttons. It should contain an icon that links to the logout page in the left corner. The bar should be created in the HTML, not being rendered in JS.
+
+# 23
+The game needs a chat/log system accessible via a popup chat overlay that extends up over a small portion of the game content when the user clicks it on the right side of the bottom bar on the game page (index.html and frontend/index.ts).
+
+It should be a typical scrollable chat widget with the ability for the player to type and send their own message as well as see messages from the system.
+
+A TypeScript function should exist in the frontend that adds a message. To test the system, send a hello world message when the game inits.
+
+If the chat popup is closed when a new message arrives from the sysem, an unitruisve notification dot should appear that clears when the user opens the chat.
+
+# 24
+Look at my files, not what you sent. The chat isn't opening when I press the button.
+
+# 25
+All the HTML elements gotten in the ChatSystem constructor are null.
