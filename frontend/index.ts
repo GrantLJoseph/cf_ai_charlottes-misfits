@@ -304,16 +304,23 @@ class CardGame {
 	}
 
 	private setupResizeHandler(): void {
-		window.addEventListener('resize', () => {
-			this.animatingCards.clear();
-			// Update hitArea to match new canvas size
-			this.app.stage.hitArea = new Rectangle(0, 0, this.app.screen.width, this.app.screen.height);
-			this.positionUI();
-			this.positionDeckCards();
-			this.positionStackCards();
-			this.positionReserveCards(true);
-			this.positionCards(true);
+		// Listen to PixiJS renderer resize event instead of window resize
+		// This ensures we react after PixiJS has updated its internal dimensions
+		this.app.renderer.on('resize', () => {
+			this.handleResize();
 		});
+	}
+
+	private handleResize(): void {
+		this.animatingCards.clear();
+		// Update hitArea to match new canvas size
+		this.app.stage.hitArea = new Rectangle(0, 0, this.app.screen.width, this.app.screen.height);
+		this.positionUI();
+		this.positionDeckCards();
+		this.positionStackCards();
+		this.positionReserveCards(true);
+		this.positionCards(true);
+		this.updateScrollArrows();
 	}
 
 	// Serialize a card for storage (strip PixiJS container)
