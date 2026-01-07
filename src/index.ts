@@ -182,7 +182,7 @@ export default {
 				});
 			}
 
-			let id = env.GAME_DATA_SERVER.idFromName('username');
+			let id = env.GAME_DATA_SERVER.idFromName(`${username}`);
 			let gameDataServer = env.GAME_DATA_SERVER.get(id);
 
 			return gameDataServer.fetch(request);
