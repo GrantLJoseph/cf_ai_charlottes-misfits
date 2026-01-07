@@ -71,6 +71,13 @@ async function isAuthenticated(request: Request, env: Env): Promise<boolean> {
 	return session !== null;
 }
 
+// Get username from session
+async function getUsername(request: Request, env: Env): Promise<string | null> {
+	const sessionToken = getSessionFromCookie(request);
+	if (!sessionToken) return null;
+	return await env.KV.get(`session:${sessionToken}`);
+}
+
 export default {
 	async fetch(request: Request, env: Env): Promise<Response> {
 		const url = new URL(request.url);
@@ -132,11 +139,12 @@ export default {
 					expirationTtl: 60 * 60 * 24 // 24 hours
 				});
 
-				// Redirect to home with session cookie
+				// Redirect admin to /admin, others to home
+				const redirectLocation = username === 'admin' ? '/admin' : '/';
 				return new Response(null, {
 					status: 302,
 					headers: {
-						'Location': '/',
+						'Location': redirectLocation,
 						'Set-Cookie': `session=${sessionToken}; HttpOnly; Secure; SameSite=Strict; Max-Age=${60 * 60 * 24}`
 					}
 				});
@@ -167,6 +175,87 @@ export default {
 		}
 
 		// All routes are authenticated from here down
+		const username = await getUsername(request, env);
+
+		// Admin routes - only accessible by admin user
+		if (pathname === '/admin' || pathname.startsWith('/api/admin/')) {
+			if (username !== 'admin') {
+				return new Response('Forbidden', { status: 403 });
+			}
+
+			// Serve admin panel HTML (from static assets)
+			if (pathname === '/admin' && request.method === 'GET') {
+				return env.ASSETS.fetch(`${url.origin}/admin.html`);
+			}
+
+			// API: List all users
+			if (pathname === '/api/admin/users' && request.method === 'GET') {
+				const users: string[] = [];
+				const list = await env.KV.list({ prefix: 'user:' });
+				for (const key of list.keys) {
+					users.push(key.name.replace('user:', ''));
+				}
+				return new Response(JSON.stringify({ users }), {
+					headers: { 'Content-Type': 'application/json' }
+				});
+			}
+
+			// API: Add new user
+			if (pathname === '/api/admin/users' && request.method === 'POST') {
+				const body = await request.json() as { username?: string; password?: string };
+				const { username: newUsername, password } = body;
+
+				if (!newUsername || !password) {
+					return new Response(JSON.stringify({ error: 'Username and password required' }), {
+						status: 400,
+						headers: { 'Content-Type': 'application/json' }
+					});
+				}
+
+				// Check if user already exists
+				const existing = await env.KV.get(`user:${newUsername}`);
+				if (existing) {
+					return new Response(JSON.stringify({ error: 'User already exists' }), {
+						status: 409,
+						headers: { 'Content-Type': 'application/json' }
+					});
+				}
+
+				// Hash password and store
+				const hash = bcrypt.hashSync(password, 12);
+				await env.KV.put(`user:${newUsername}`, hash);
+
+				return new Response(JSON.stringify({ success: true }), {
+					headers: { 'Content-Type': 'application/json' }
+				});
+			}
+
+			// API: Delete user
+			if (pathname.startsWith('/api/admin/users/') && request.method === 'DELETE') {
+				const userToDelete = decodeURIComponent(pathname.replace('/api/admin/users/', ''));
+
+				if (userToDelete === 'admin') {
+					return new Response(JSON.stringify({ error: 'Cannot delete admin user' }), {
+						status: 400,
+						headers: { 'Content-Type': 'application/json' }
+					});
+				}
+
+				await env.KV.delete(`user:${userToDelete}`);
+
+				return new Response(JSON.stringify({ success: true }), {
+					headers: { 'Content-Type': 'application/json' }
+				});
+			}
+		}
+
+		// Redirect admin to /admin if they try to access the game
+		if (pathname === '/' && username === 'admin') {
+			return new Response(null, {
+				status: 302,
+				headers: { 'Location': '/admin' }
+			});
+		}
 
 		// Establish WebSocket connection for game data
 		if (pathname === '/game-data') {

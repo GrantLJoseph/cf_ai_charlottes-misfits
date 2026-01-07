@@ -106,6 +106,7 @@ out
 
 .nuxt
 dist/index.js
+dist/admin.js
 
 # Gatsby files
 

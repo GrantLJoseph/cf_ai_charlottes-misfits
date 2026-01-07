@@ -219,3 +219,9 @@ Look at the screenshot of the game in game.png. Make the rules setup diagram mat
 
 # 55
 When the user logs in as the 'admin' user, instead of opening the game, it should take the user to a settings panel page. From this page, I can see all existing user accounts for the game and add and delete them.
+
+# 56
+No inline scripts, CSP friendly in future. Scripts should be in TypeScript. If possible, make the page static in /dist.
+
+# 57
+I get spammed with infinite redirects when I try to login as admin. The worker logs the mas 307 Temporary Redirect.

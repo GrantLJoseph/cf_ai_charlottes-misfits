@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Admin Panel - Charlotte's Misfits</title>
+	<link rel="stylesheet" href="admin.css">
+</head>
+<body>
+	<div class="container">
+		<div class="header">
+			<h1>Admin Panel</h1>
+			<a href="/logout" class="logout-btn">Logout</a>
+		</div>
+
+		<div class="card">
+			<h2>Add New User</h2>
+			<div id="add-message"></div>
+			<form id="add-user-form">
+				<div class="form-row">
+					<input type="text" id="new-username" placeholder="Username" required>
+					<input type="password" id="new-password" placeholder="Password" required>
+				</div>
+				<button type="submit" class="add-btn" id="add-btn">Add User</button>
+			</form>
+		</div>
+
+		<div class="card">
+			<h2>User Accounts</h2>
+			<div id="list-message"></div>
+			<ul class="user-list" id="user-list">
+				<li class="empty-state">Loading...</li>
+			</ul>
+		</div>
+	</div>
+
+	<script src="admin.js"></script>
+</body>
+</html>
