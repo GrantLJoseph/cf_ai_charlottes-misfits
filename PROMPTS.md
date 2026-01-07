@@ -198,3 +198,12 @@ The chat scroll bar should match the color scheme of the chat.
 
 # 48
 There should be a reset button in the bottom left corner, to the right of the logout button, that ends the game early and resets the entire game state both locally and on the server.
+
+# 49
+Add a rules button, symbolized by a book icon, to the lower right corner, next to the chat button. It should open a very large, but not quite fullscreen, popup displaying the rules text, complete with examples and diagrams, and a close button in the upper right corner.
+
+# 50
+Make the rules popup light theme. It's too dark as-is. Also, increase the spacing between the logout and reset buttons and the rules and chat buttons. Each cluster feels cramped.
+
+# 51
+The rules popup header is still green. The diagram of the play area shows the player's and opponent's areas at the top and bottom of the screen when the user's area is on the right and the computer's is on the left.

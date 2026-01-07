@@ -179,6 +179,34 @@ class CardGame {
 		if (resetButton) {
 			resetButton.addEventListener('click', () => this.resetGame());
 		}
+
+		// Rules popup
+		const rulesToggle = document.getElementById('rules-toggle');
+		const rulesPopup = document.getElementById('rules-popup');
+		const rulesClose = document.getElementById('rules-close');
+		const rulesBackdrop = document.getElementById('rules-backdrop');
+
+		if (rulesToggle && rulesPopup && rulesClose && rulesBackdrop) {
+			const openRules = () => {
+				rulesPopup.classList.remove('rules-hidden');
+				rulesBackdrop.classList.add('visible');
+			};
+			const closeRules = () => {
+				rulesPopup.classList.add('rules-hidden');
+				rulesBackdrop.classList.remove('visible');
+			};
+
+			rulesToggle.addEventListener('click', openRules);
+			rulesClose.addEventListener('click', closeRules);
+			rulesBackdrop.addEventListener('click', closeRules);
+
+			// Close on Escape key
+			document.addEventListener('keydown', (e) => {
+				if (e.key === 'Escape' && !rulesPopup.classList.contains('rules-hidden')) {
+					closeRules();
+				}
+			});
+		}
 	}
 
 	private resetGame(): void {

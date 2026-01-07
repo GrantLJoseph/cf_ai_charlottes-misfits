@@ -24,6 +24,12 @@
 			</svg>
 		</button>
 		<div class="bar-spacer"></div>
+		<button id="rules-toggle" class="bar-icon" title="Rules">
+			<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+				<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+				<path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+			</svg>
+		</button>
 		<button id="chat-toggle" class="bar-icon" title="Chat">
 			<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 				<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
@@ -46,6 +52,172 @@
 					<polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
 				</svg>
 			</button>
+		</div>
+	</div>
+
+	<div id="rules-backdrop"></div>
+	<div id="rules-popup" class="rules-hidden">
+		<div id="rules-header">
+			<span>Charlotte's Misfits - Rules</span>
+			<button id="rules-close" title="Close">×</button>
+		</div>
+		<div id="rules-content">
+			<section>
+				<h2>Overview</h2>
+				<p>Charlotte's Misfits is a strategic card game where the goal is to be the first player to get rid of all your cards. Players take turns placing cards on a central stack, following specific rules about card ranks and combinations.</p>
+			</section>
+
+			<section>
+				<h2>Setup</h2>
+				<ol>
+					<li>Each player draws <strong>9 cards</strong> face down into their hand.</li>
+					<li>Without looking, each player selects <strong>3 cards</strong> to place face down as their <strong>Hidden Reserve</strong>.</li>
+					<li>Players then look at their remaining 6 cards and create <strong>3 placements</strong> for their <strong>Visible Reserve</strong>.</li>
+					<li>After setup, players draw back up to 3 cards in hand.</li>
+				</ol>
+				<div class="rules-diagram">
+					<div class="diagram-layout horizontal">
+						<div class="diagram-section">
+							<div class="diagram-label">Opponent</div>
+							<div class="diagram-column">
+								<div class="card-placeholder small">Hidden</div>
+								<div class="card-placeholder small">Hidden</div>
+								<div class="card-placeholder small">Hidden</div>
+							</div>
+							<div class="diagram-column">
+								<div class="card-placeholder small">Visible</div>
+								<div class="card-placeholder small">Visible</div>
+								<div class="card-placeholder small">Visible</div>
+							</div>
+						</div>
+						<div class="diagram-center vertical">
+							<div class="card-placeholder">Stack</div>
+							<div class="card-placeholder deck">Deck</div>
+						</div>
+						<div class="diagram-section">
+							<div class="diagram-column">
+								<div class="card-placeholder small">Visible</div>
+								<div class="card-placeholder small">Visible</div>
+								<div class="card-placeholder small">Visible</div>
+							</div>
+							<div class="diagram-column">
+								<div class="card-placeholder small">Hidden</div>
+								<div class="card-placeholder small">Hidden</div>
+								<div class="card-placeholder small">Hidden</div>
+							</div>
+							<div class="diagram-label">You</div>
+						</div>
+					</div>
+				</div>
+			</section>
+
+			<section>
+				<h2>Valid Placements</h2>
+				<p>A placement can be one of the following:</p>
+				<ul>
+					<li><strong>Single card</strong> - Any one card</li>
+					<li><strong>Multiple of a kind</strong> - Two or more cards of the same rank (e.g., three 7s)</li>
+					<li><strong>Straight</strong> - Three or more consecutive cards (e.g., 5-6-7)</li>
+				</ul>
+				<div class="rules-examples">
+					<div class="example valid">
+						<div class="example-cards">
+							<span class="mini-card">7♠</span>
+							<span class="mini-card">7♥</span>
+							<span class="mini-card">7♦</span>
+						</div>
+						<span class="example-label">✓ Valid - Three of a kind</span>
+					</div>
+					<div class="example valid">
+						<div class="example-cards">
+							<span class="mini-card">9♣</span>
+							<span class="mini-card">10♥</span>
+							<span class="mini-card">J♠</span>
+						</div>
+						<span class="example-label">✓ Valid - Straight</span>
+					</div>
+					<div class="example invalid">
+						<div class="example-cards">
+							<span class="mini-card">5♠</span>
+							<span class="mini-card">7♥</span>
+						</div>
+						<span class="example-label">✗ Invalid - Not consecutive or same rank</span>
+					</div>
+				</div>
+			</section>
+
+			<section>
+				<h2>Playing on the Stack</h2>
+				<p>On your turn, you must play a valid placement onto the stack. The <strong>lowest card</strong> of your placement must be <strong>equal to or higher</strong> than the top card of the stack.</p>
+				<div class="rules-examples">
+					<div class="example">
+						<div class="example-scenario">
+							<span>Stack top: <span class="mini-card">8♥</span></span>
+							<span>You play: <span class="mini-card">10♠</span><span class="mini-card">10♦</span></span>
+						</div>
+						<span class="example-label">✓ Valid - 10 ≥ 8</span>
+					</div>
+					<div class="example">
+						<div class="example-scenario">
+							<span>Stack top: <span class="mini-card">J♣</span></span>
+							<span>You play: <span class="mini-card">9♠</span><span class="mini-card">10♥</span><span class="mini-card">J♦</span></span>
+						</div>
+						<span class="example-label">✗ Invalid - Lowest card (9) < Jack</span>
+					</div>
+				</div>
+			</section>
+
+			<section>
+				<h2>Special Cards</h2>
+				<div class="special-cards">
+					<div class="special-card">
+						<div class="special-card-display">2</div>
+						<div class="special-card-info">
+							<h3>Twos - Wild Card</h3>
+							<p>A 2 can <strong>always be played</strong>, regardless of the stack's top card. Straights starting with 2 can also always be played.</p>
+						</div>
+					</div>
+					<div class="special-card">
+						<div class="special-card-display">A</div>
+						<div class="special-card-info">
+							<h3>Aces - Stack Burner</h3>
+							<p>Aces can always be played (they're the highest). When played, the <strong>entire stack is discarded</strong> from the game, and you <strong>get another turn</strong>.</p>
+						</div>
+					</div>
+				</div>
+			</section>
+
+			<section>
+				<h2>Taking the Stack</h2>
+				<p>If you cannot make a valid play, you must <strong>pick up the entire stack</strong> into your hand. Your turn then ends.</p>
+			</section>
+
+			<section>
+				<h2>Hand Management</h2>
+				<ul>
+					<li>You must always have <strong>at least 3 cards</strong> in your hand (if possible).</li>
+					<li>After playing, <strong>draw from the deck</strong> until you have 3 cards.</li>
+					<li>When the deck is empty, you cannot draw anymore.</li>
+					<li>When your hand is empty, your <strong>Visible Reserve</strong> becomes your hand.</li>
+					<li>When both hand and Visible Reserve are empty, you play from your <strong>Hidden Reserve</strong> (one card at a time, revealed when played).</li>
+				</ul>
+			</section>
+
+			<section>
+				<h2>Winning</h2>
+				<p>The first player to <strong>get rid of all their cards</strong> (hand, Visible Reserve, and Hidden Reserve) wins the game!</p>
+			</section>
+
+			<section>
+				<h2>Strategy Tips</h2>
+				<ul>
+					<li>🎯 <strong>Play low cards early</strong> - They're harder to get rid of later.</li>
+					<li>🃏 <strong>Save 2s for emergencies</strong> - They can get you out of tough spots.</li>
+					<li>🔥 <strong>Time your Aces</strong> - Use them when the stack is large to remove more cards from play.</li>
+					<li>📊 <strong>Watch your opponent</strong> - If they have few cards, try to spike them with high cards.</li>
+					<li>🎲 <strong>Hidden Reserve is risky</strong> - You can't see what you'll draw, so the game can turn quickly at the end.</li>
+				</ul>
+			</section>
 		</div>
 	</div>
 </body>
