@@ -180,3 +180,9 @@ I refactored the code in minor ways and now now now cards display when the user 
 
 # 42
 The card still don't load at the start. The text, stack and deck background rects, and size numbers do.
+
+# 43
+Everything is undefined when building the visibleState string for the prompt
+
+# 44
+The chat history should be stored in the server as part of the game state. It should also be available to the chat AI.

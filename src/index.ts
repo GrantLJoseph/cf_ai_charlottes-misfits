@@ -28,6 +28,11 @@ type GamePhase =
 	| 'computer-turn'
 	| 'game-over';
 
+interface ChatMessage {
+	role: 'player' | 'assistant';
+	content: string;
+}
+
 // Complete game state that gets persisted
 interface GameState {
 	deck: SerializedCard[];
@@ -39,6 +44,7 @@ interface GameState {
 	computerHiddenReserve: SerializedCard[];
 	computerVisibleReserve: SerializedPlacement[];
 	gamePhase: GamePhase;
+	chatHistory: ChatMessage[];
 }
 
 // Generate a simple session token
@@ -304,13 +310,16 @@ export class GameDataServer extends DurableObject {
 	}
 
 	async webSocketMessage(ws: WebSocket, message: ArrayBuffer | string) {
+		if (!this.state) {
+			this.state = await this.ctx.storage.get<GameState>('gameState') ?? null;
+		}
+
 		const data = JSON.parse(message.toString());
 
 		switch (data.type) {
 			case 'state-get': {
-				const state = this.state ?? await this.ctx.storage.get<GameState>('gameState');
-				if (state) {
-					ws.send(JSON.stringify({ type: 'state-load', state }));
+				if (this.state) {
+					ws.send(JSON.stringify({ type: 'state-load', state: this.state }));
 				} else {
 					ws.send(JSON.stringify({ type: 'state-none' }));
 				}
@@ -342,17 +351,18 @@ export class GameDataServer extends DurableObject {
 					{
 						role: 'user',
 						content: `Current game state:
-								  - Your hand: ${JSON.stringify(this.state?.computerHand)}
-								  - Your opponent's hand size: ${this.state?.playerHand.length}
-								  - The stack: ${JSON.stringify(this.state?.stack)}
-								  - Your visible reserve: ${JSON.stringify(this.state?.computerVisibleReserve)}
-								  - Your opponent's visible reserve: ${JSON.stringify(this.state?.playerVisibleReserve)}
-								  - Your hidden reserve size: ${this.state?.computerHiddenReserve.length}
-								  - Your opponent's hidden reserve size: ${this.state?.playerHiddenReserve.length}
+- Your hand: ${JSON.stringify(this.state?.computerHand)}
+- Your opponent's hand size: ${this.state?.playerHand.length}
+- The stack: ${JSON.stringify(this.state?.stack)}
+- Your visible reserve: ${JSON.stringify(this.state?.computerVisibleReserve)}
+- Your opponent's visible reserve: ${JSON.stringify(this.state?.playerVisibleReserve)}
+- Your hidden reserve size: ${this.state?.computerHiddenReserve.length}
+- Your opponent's hidden reserve size: ${this.state?.playerHiddenReserve.length}
+- Deck size: ${this.state?.deck.length}
 
-								  To play a card, use the "play" action and include the index(es) of the card(s) in your hand to play, starting at 0. To pick up the stack, use the "stack" action. To pick up a hidden card, use the "hidden" action with an index 0-2.
+To play a card, use the "play" action and include the index(es) of the card(s) in your hand to play, starting at 0. To pick up the stack, use the "stack" action. To pick up a hidden card, use the "hidden" action with an index 0-2.
 
-								  What is your move?`
+What is your move?`
 					}
 				];
 
@@ -499,6 +509,103 @@ export class GameDataServer extends DurableObject {
 				console.log('==============================');
 
 				ws.send(JSON.stringify({type: 'action-res', action: parsedResponse}));
+				break;
+			}
+
+			case 'chat-req': {
+				const playerMessage = data.message;
+				if (!playerMessage || typeof playerMessage !== 'string') {
+					ws.send(JSON.stringify({ type: 'chat-res', message: 'Invalid message.' }));
+					break;
+				}
+
+				// Initialize chat history if needed
+				if (this.state && !this.state.chatHistory) {
+					this.state.chatHistory = [];
+				}
+
+				// Add player message to history
+				if (this.state) {
+					this.state.chatHistory.push({ role: 'player', content: playerMessage });
+				}
+
+				try {
+					// Build player-visible state (no computer hand info)
+					const visibleState = `Current game state:
+- Player's hand: ${JSON.stringify(this.state?.playerHand)}
+- Opponent's hand size: ${this.state?.computerHand.length} cards
+- The stack: ${JSON.stringify(this.state?.stack)}
+- Player's visible reserve: ${JSON.stringify(this.state?.playerVisibleReserve)}
+- Opponent's visible reserve: ${JSON.stringify(this.state?.computerVisibleReserve)}
+- Player's hidden reserve size: ${this.state?.playerHiddenReserve.length}
+- Opponent's hidden reserve size: ${this.state?.computerHiddenReserve.length}
+- Game phase: ${this.state?.gamePhase}
+- Cards remaining in deck: ${this.state?.deck.length}`;
+
+					console.log(visibleState);
+
+					// Build conversation history for AI
+					const chatInput: EasyInputMessage[] = [
+						{
+							role: 'user',
+							content: `${visibleState}\n\n(The game state above will be updated with each message. Previous conversation follows.)`
+						}
+					];
+
+					// Add chat history to input
+					for (const msg of this.state?.chatHistory ?? []) {
+						chatInput.push({
+							role: msg.role === 'player' ? 'user' : 'assistant',
+							content: msg.content
+						});
+					}
+
+					const response = await this.env.AI.run('@cf/openai/gpt-oss-120b', {
+						instructions: `You are a helpful assistant for a card game called Charlotte's Misfits. Your job is to give strategic advice to the player. Be concise but helpful. Strictly limited unnecessary symbols in your output and keep responses breif while remaining helpful. Here are the rules of the game: ${RULES}`,
+						input: chatInput
+					});
+
+					// Extract the response text
+					let responseText = response.output_text;
+					if (!responseText && response.output) {
+						for (const item of response.output) {
+							if (item && typeof item === 'object' && 'content' in item) {
+								const msg = item as { content?: Array<{ text?: string; type?: string }> };
+								const textContent = msg.content?.find(c => c.type === 'output_text');
+								if (textContent?.text) {
+									responseText = textContent.text;
+									break;
+								}
+							}
+						}
+					}
+
+					const assistantMessage = responseText || 'Sorry, I could not generate a response.';
+
+					// Add assistant response to history
+					if (this.state) {
+						this.state.chatHistory.push({ role: 'assistant', content: assistantMessage });
+						await this.ctx.storage.put('gameState', this.state);
+					}
+
+					ws.send(JSON.stringify({
+						type: 'chat-res',
+						message: assistantMessage
+					}));
+				} catch (e) {
+					console.error('Chat AI error:', e);
+					const errorMessage = 'Sorry, I encountered an error while thinking about your question.';
+
+					// Still save the player message even if AI fails
+					if (this.state) {
+						await this.ctx.storage.put('gameState', this.state);
+					}
+
+					ws.send(JSON.stringify({
+						type: 'chat-res',
+						message: errorMessage
+					}));
+				}
 				break;
 			}
 		}

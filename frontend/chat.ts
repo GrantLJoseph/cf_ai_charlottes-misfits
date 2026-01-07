@@ -7,10 +7,9 @@ export default class Chat {
 	private closeButton: HTMLElement;
 	private notificationDot: HTMLElement;
 	private isOpen: boolean = false;
-	private hasUnreadMessages = false;
-	private chatOpen = false;
+	private onSendMessage: ((message: string) => void) | null = null;
 
-	constructor() {
+	constructor(onSendMessage?: (message: string) => void) {
 		this.popup = document.getElementById('chat-popup')!;
 		this.messagesContainer = document.getElementById('chat-messages')!;
 		this.input = document.getElementById('chat-input') as HTMLInputElement;
@@ -18,54 +17,9 @@ export default class Chat {
 		this.toggleButton = document.getElementById('chat-toggle')!;
 		this.closeButton = document.getElementById('chat-close')!;
 		this.notificationDot = document.getElementById('chat-notification')!;
+		this.onSendMessage = onSendMessage || null;
 
 		this.setupEventListeners();
-
-		const chatToggle = document.getElementById('chat-toggle');
-		const chatPopup = document.getElementById('chat-popup');
-		const chatClose = document.getElementById('chat-close');
-		const chatInput = document.getElementById('chat-input') as HTMLInputElement;
-		const chatSend = document.getElementById('chat-send');
-		const notificationDot = document.getElementById('chat-notification');
-
-		if (!chatToggle || !chatPopup || !chatClose || !chatInput || !chatSend) return;
-
-		// Toggle chat
-		chatToggle.addEventListener('click', () => {
-			this.chatOpen = !this.chatOpen;
-			chatPopup.classList.toggle('chat-hidden', !this.chatOpen);
-
-			if (this.chatOpen) {
-				// Clear notification
-				this.hasUnreadMessages = false;
-				if (notificationDot) {
-					notificationDot.classList.remove('visible');
-				}
-				chatInput.focus();
-			}
-		});
-
-		// Close button
-		chatClose.addEventListener('click', () => {
-			this.chatOpen = false;
-			chatPopup.classList.add('chat-hidden');
-		});
-
-		// Send message
-		const sendMessage = () => {
-			const message = chatInput.value.trim();
-			if (message) {
-				this.addMessage(message, 'player');
-				chatInput.value = '';
-			}
-		};
-
-		chatSend.addEventListener('click', sendMessage);
-		chatInput.addEventListener('keypress', (e) => {
-			if (e.key === 'Enter') {
-				sendMessage();
-			}
-		});
 	}
 
 	private setupEventListeners(): void {
@@ -90,27 +44,14 @@ export default class Chat {
 	open(): void {
 		this.isOpen = true;
 		this.popup.classList.remove('chat-hidden');
-		this.clearNotification();
-		this.scrollToBottom();
+		this.notificationDot.classList.remove('visible');
+		this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
+		this.input.focus();
 	}
 
 	close(): void {
 		this.isOpen = false;
 		this.popup.classList.add('chat-hidden');
-	}
-
-	private clearNotification(): void {
-		this.notificationDot.classList.remove('visible');
-	}
-
-	private showNotification(): void {
-		if (!this.isOpen) {
-			this.notificationDot.classList.add('visible');
-		}
-	}
-
-	private scrollToBottom(): void {
-		this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
 	}
 
 	private sendPlayerMessage(): void {
@@ -119,27 +60,25 @@ export default class Chat {
 
 		this.addMessage(text, 'player');
 		this.input.value = '';
+
+		// Call the callback if set
+		if (this.onSendMessage) {
+			this.onSendMessage(text);
+		}
 	}
 
 	addMessage(text: string, type: 'system' | 'player' = 'system'): void {
-		const messagesContainer = document.getElementById('chat-messages');
-		if (!messagesContainer) return;
-
 		const messageEl = document.createElement('div');
 		messageEl.className = `chat-message ${type}`;
 		messageEl.textContent = text;
-		messagesContainer.appendChild(messageEl);
+		this.messagesContainer.appendChild(messageEl);
 
 		// Auto-scroll to bottom
-		messagesContainer.scrollTop = messagesContainer.scrollHeight;
+		this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
 
 		// Show notification dot if chat is closed and it's a system message
-		if (!this.chatOpen && type === 'system') {
-			this.hasUnreadMessages = true;
-			const notificationDot = document.getElementById('chat-notification');
-			if (notificationDot) {
-				notificationDot.classList.add('visible');
-			}
+		if (!this.isOpen && type === 'system') {
+			this.notificationDot.classList.add('visible');
 		}
 	}
 }

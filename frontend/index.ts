@@ -12,6 +12,11 @@ interface SerializedPlacement {
 	type: 'single' | 'multiple' | 'straight';
 }
 
+interface ChatMessage {
+	role: 'player' | 'assistant';
+	content: string;
+}
+
 // Complete game state for server sync
 interface GameState {
 	deck: SerializedCard[];
@@ -23,6 +28,7 @@ interface GameState {
 	computerHiddenReserve: SerializedCard[];
 	computerVisibleReserve: SerializedPlacement[];
 	gamePhase: GamePhase;
+	chatHistory?: ChatMessage[];
 }
 
 // Card data structures
@@ -126,8 +132,14 @@ class CardGame {
 		this.stackContainer = new Container();
 		this.leftScrollArrow = new Container();
 		this.rightScrollArrow = new Container();
-		this.chat = new Chat;
 		this.socket = new WebSocket("/game-data");
+		this.chat = new Chat((message) => this.sendChatMessage(message));
+	}
+
+	private sendChatMessage(message: string): void {
+		if (this.socket.readyState === WebSocket.OPEN) {
+			this.socket.send(JSON.stringify({ type: 'chat-req', message }));
+		}
 	}
 
 	async init(): Promise<void> {
@@ -174,7 +186,10 @@ class CardGame {
 			case 'state-load':
 				this.loadGameState(data.state);
 				this.setupResizeHandler();
-				this.chat.addMessage('Game restored from previous session.');
+				// Only show restore message if no chat history was loaded
+				if (!data.state.chatHistory || data.state.chatHistory.length === 0) {
+					this.chat.addMessage('Game restored from previous session.');
+				}
 				break;
 			case 'state-none':
 				this.startNewGame();
@@ -206,6 +221,10 @@ class CardGame {
 				this.positionCards();
 				this.startPlayerTurn();
 				this.saveGameState();
+				break;
+
+			case 'chat-res':
+				this.chat.addMessage(data.message, 'system');
 				break;
 		}
 	}
@@ -361,6 +380,13 @@ class CardGame {
 		this.positionReserveCards();
 		this.updateDeckDisplay();
 		this.updateStackDisplay();
+
+		// Restore chat history
+		if (state.chatHistory) {
+			for (const msg of state.chatHistory) {
+				this.chat.addMessage(msg.content, msg.role === 'player' ? 'player' : 'system');
+			}
+		}
 	}
 
 	// Update UI elements based on current game phase
