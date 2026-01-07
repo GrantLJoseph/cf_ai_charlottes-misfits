@@ -207,3 +207,6 @@ Make the rules popup light theme. It's too dark as-is. Also, increase the spacin
 
 # 51
 The rules popup header is still green. The diagram of the play area shows the player's and opponent's areas at the top and bottom of the screen when the user's area is on the right and the computer's is on the left.
+
+# 52
+The scroll button triangles should have a larger square hitbox behind them so the user doesn't have to hover over the triangles specifically.

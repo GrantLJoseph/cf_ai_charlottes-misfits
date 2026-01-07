@@ -515,11 +515,20 @@ class CardGame {
 	}
 
 	private createScrollArrows(): void {
+		const HITBOX_SIZE = 60; // Square hitbox size
+
 		// Left arrow
+		// Add invisible square hitbox first (behind the triangle)
+		const leftHitbox = new Graphics();
+		leftHitbox.rect(0, 0, HITBOX_SIZE, HITBOX_SIZE);
+		leftHitbox.fill({ color: 0x000000, alpha: 0 });
+		this.leftScrollArrow.addChild(leftHitbox);
+
+		// Triangle centered in the hitbox
 		const leftArrowGraphic = new Graphics();
-		leftArrowGraphic.moveTo(30, 0);
-		leftArrowGraphic.lineTo(0, 30);
-		leftArrowGraphic.lineTo(30, 60);
+		leftArrowGraphic.moveTo(45, 15);
+		leftArrowGraphic.lineTo(15, 30);
+		leftArrowGraphic.lineTo(45, 45);
 		leftArrowGraphic.fill({ color: 0x87ceeb, alpha: 1 });
 		this.leftScrollArrow.addChild(leftArrowGraphic);
 		this.leftScrollArrow.eventMode = 'static';
@@ -537,10 +546,17 @@ class CardGame {
 		});
 
 		// Right arrow
+		// Add invisible square hitbox first (behind the triangle)
+		const rightHitbox = new Graphics();
+		rightHitbox.rect(0, 0, HITBOX_SIZE, HITBOX_SIZE);
+		rightHitbox.fill({ color: 0x000000, alpha: 0 });
+		this.rightScrollArrow.addChild(rightHitbox);
+
+		// Triangle centered in the hitbox
 		const rightArrowGraphic = new Graphics();
-		rightArrowGraphic.moveTo(0, 0);
-		rightArrowGraphic.lineTo(30, 30);
-		rightArrowGraphic.lineTo(0, 60);
+		rightArrowGraphic.moveTo(15, 15);
+		rightArrowGraphic.lineTo(45, 30);
+		rightArrowGraphic.lineTo(15, 45);
 		rightArrowGraphic.fill({ color: 0x87ceeb, alpha: 1 });
 		this.rightScrollArrow.addChild(rightArrowGraphic);
 		this.rightScrollArrow.eventMode = 'static';
@@ -623,7 +639,7 @@ class CardGame {
 			this.stopScrolling();
 		}
 		this.leftScrollArrow.visible = canScrollLeft;
-		this.leftScrollArrow.x = 20;
+		this.leftScrollArrow.x = 10;
 		this.leftScrollArrow.y = screenHeight - CARD_HEIGHT * UNSELECTED_VISIBLE / 2 - this.leftScrollArrow.height / 2;
 
 		// Show right arrow if we can scroll right (offset can decrease toward min)
@@ -632,7 +648,7 @@ class CardGame {
 			this.stopScrolling();
 		}
 		this.rightScrollArrow.visible = canScrollRight;
-		this.rightScrollArrow.x = screenWidth - 50;
+		this.rightScrollArrow.x = screenWidth - 70;
 		this.rightScrollArrow.y = screenHeight - CARD_HEIGHT * UNSELECTED_VISIBLE / 2 - this.rightScrollArrow.height / 2;
 	}
 
