@@ -406,7 +406,7 @@ class CardGame {
 		if (cards.length === 1) return this.formatCard(cards[0]);
 		if (cards.length === 2) return `${this.formatCard(cards[0])} and ${this.formatCard(cards[1])}`;
 		const last = cards[cards.length - 1];
-		const rest = cards.slice(0, -1).map((card) => this.formatCard(card.suit, card.rank)).join(', ');
+		const rest = cards.slice(0, -1).map((card) => this.formatCard(card)).join(', ');
 		return `${rest}, and ${this.formatCard(last)}`;
 	}
 
