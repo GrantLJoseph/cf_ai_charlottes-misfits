@@ -225,3 +225,6 @@ No inline scripts, CSP friendly in future. Scripts should be in TypeScript. If p
 
 # 57
 I get spammed with infinite redirects when I try to login as admin. The worker logs the mas 307 Temporary Redirect.
+
+# 58
+The game has never resized properly when the window resizes or the browser dev tools are opened. It doesn't resize until the user mouses over a card. Even then, some of the UI elements, mainly the stack and deck background rects, don't readjust at all.
