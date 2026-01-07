@@ -193,6 +193,31 @@ canvas {
 	gap: 8px;
 }
 
+/* Custom scrollbar for chat */
+#chat-messages::-webkit-scrollbar {
+	width: 8px;
+}
+
+#chat-messages::-webkit-scrollbar-track {
+	background: #0f2d1a;
+	border-radius: 4px;
+}
+
+#chat-messages::-webkit-scrollbar-thumb {
+	background: #2a5a3a;
+	border-radius: 4px;
+}
+
+#chat-messages::-webkit-scrollbar-thumb:hover {
+	background: #3b6b4b;
+}
+
+/* Firefox scrollbar */
+#chat-messages {
+	scrollbar-width: thin;
+	scrollbar-color: #2a5a3a #0f2d1a;
+}
+
 .chat-message {
 	padding: 8px 12px;
 	border-radius: 8px;

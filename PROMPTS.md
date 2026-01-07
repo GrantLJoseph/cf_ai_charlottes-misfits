@@ -192,3 +192,6 @@ Make the chat window resizable and rename the display from "Game Log" to "AI Cha
 
 # 46
 The resize handle is in the lower right corner of the popup. It should be in the upper left. It should also be resizable at the edges, too.
+
+# 47
+The chat scroll bar should match the color scheme of the chat.
