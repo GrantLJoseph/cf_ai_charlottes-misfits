@@ -186,3 +186,9 @@ Everything is undefined when building the visibleState string for the prompt
 
 # 44
 The chat history should be stored in the server as part of the game state. It should also be available to the chat AI.
+
+# 45
+Make the chat window resizable and rename the display from "Game Log" to "AI Chat & Game Log".
+
+# 46
+The resize handle is in the lower right corner of the popup. It should be in the upper left. It should also be resizable at the edges, too.
