@@ -195,3 +195,6 @@ The resize handle is in the lower right corner of the popup. It should be in the
 
 # 47
 The chat scroll bar should match the color scheme of the chat.
+
+# 48
+There should be a reset button in the bottom left corner, to the right of the logout button, that ends the game early and resets the entire game state both locally and on the server.

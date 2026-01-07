@@ -122,6 +122,10 @@ export default class Chat {
 		this.popup.classList.add('chat-hidden');
 	}
 
+	clear(): void {
+		this.messagesContainer.innerHTML = '';
+	}
+
 	private sendPlayerMessage(): void {
 		const text = this.input.value.trim();
 		if (!text) return;

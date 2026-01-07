@@ -173,6 +173,52 @@ class CardGame {
 		// Connect to server - game initialization happens in handleSocketMessage
 		this.socket.addEventListener("open", () => this.handleSocketOpen());
 		this.socket.addEventListener("message", (event) => this.handleSocketMessage(event));
+
+		// Reset button
+		const resetButton = document.getElementById('reset-game');
+		if (resetButton) {
+			resetButton.addEventListener('click', () => this.resetGame());
+		}
+	}
+
+	private resetGame(): void {
+		if (!confirm('Are you sure you want to reset the game? All progress will be lost.')) {
+			return;
+		}
+
+		// Destroy all card containers
+		const allCards = [
+			...this.deck,
+			...this.stack,
+			...this.playerHand,
+			...this.playerHiddenReserve,
+			...this.playerVisibleReserve.flatMap(p => p.cards),
+			...this.computerHand,
+			...this.computerHiddenReserve,
+			...this.computerVisibleReserve.flatMap(p => p.cards)
+		];
+		allCards.forEach(card => card.container.destroy());
+
+		// Clear all arrays
+		this.deck = [];
+		this.stack = [];
+		this.playerHand = [];
+		this.playerHiddenReserve = [];
+		this.playerVisibleReserve = [];
+		this.computerHand = [];
+		this.computerHiddenReserve = [];
+		this.computerVisibleReserve = [];
+		this.handScrollOffset = 0;
+
+		// Clear chat
+		this.chat.clear();
+
+		// Clear server state
+		this.clearGameState();
+
+		// Start fresh
+		this.startNewGame();
+		this.chat.addMessage('Game has been reset. Good luck!');
 	}
 
 	private handleSocketOpen(): void {
