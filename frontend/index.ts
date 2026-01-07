@@ -52,19 +52,27 @@ type GamePhase =
 	| 'computer-turn'
 	| 'game-over';
 
-// Card configuration
-const CARD_WIDTH = 120;
-const CARD_HEIGHT = 168;
-const CARD_RADIUS = 12;
-const CARD_SPACING = 140;
+// Reference resolution (16:9 monitor) - all base values are designed for this
+const REFERENCE_WIDTH = 1920;
+const REFERENCE_HEIGHT = 1080;
+
+// Base card configuration (at reference resolution)
+const BASE_CARD_WIDTH = 120;
+const BASE_CARD_HEIGHT = 168;
+const BASE_CARD_RADIUS = 12;
+const BASE_CARD_SPACING = 140;
+const BASE_SELECTED_RISE = 80;
+const BASE_HOVER_RISE = 10;
+const BASE_RESERVE_SPACING = BASE_CARD_WIDTH + 20;
+const BASE_RESERVE_CARD_PEEK = 60;
+const BASE_HITBOX_SIZE = 60;
+const BASE_FONT_SIZE_RANK = 28;
+const BASE_FONT_SIZE_SUIT_SMALL = 20;
+const BASE_FONT_SIZE_SUIT_CENTER = 56;
+
+// Ratios (don't scale)
 const UNSELECTED_VISIBLE = 0.5;
 const COMPUTER_HAND_VISIBLE = 0.2;
-const SELECTED_RISE = 80;
-const HOVER_RISE = 10;
-
-// Reserve display configuration
-const RESERVE_SPACING = CARD_WIDTH + 20; // Horizontal spacing between reserve piles
-const RESERVE_CARD_PEEK = 60; // How much of each stacked card shows (enough for rank/suit)
 
 const SUIT_SYMBOLS = {
 	hearts: '♥',
@@ -122,6 +130,62 @@ class CardGame {
 	private leftScrollArrow: Container;
 	private rightScrollArrow: Container;
 
+	// Scale factor for responsive sizing
+	private scale: number = 1;
+
+	// Scaled dimension getters
+	private get cardWidth(): number { return BASE_CARD_WIDTH * this.scale; }
+	private get cardHeight(): number { return BASE_CARD_HEIGHT * this.scale; }
+	private get cardRadius(): number { return BASE_CARD_RADIUS * this.scale; }
+	private get cardSpacing(): number { return BASE_CARD_SPACING * this.scale; }
+	private get selectedRise(): number { return BASE_SELECTED_RISE * this.scale; }
+	private get hoverRise(): number { return BASE_HOVER_RISE * this.scale; }
+	private get reserveSpacing(): number { return BASE_RESERVE_SPACING * this.scale; }
+	private get reserveCardPeek(): number { return BASE_RESERVE_CARD_PEEK * this.scale; }
+	private get hitboxSize(): number { return BASE_HITBOX_SIZE * this.scale; }
+	private get fontSizeRank(): number { return BASE_FONT_SIZE_RANK * this.scale; }
+	private get fontSizeSuitSmall(): number { return BASE_FONT_SIZE_SUIT_SMALL * this.scale; }
+	private get fontSizeSuitCenter(): number { return BASE_FONT_SIZE_SUIT_CENTER * this.scale; }
+
+	// Calculate scale factor based on screen size
+	private calculateScale(): void {
+		const scaleX = this.app.screen.width / REFERENCE_WIDTH;
+		const scaleY = this.app.screen.height / REFERENCE_HEIGHT;
+		this.scale = Math.min(scaleX, scaleY);
+	}
+
+	// Redraw all card containers with current scale
+	private redrawAllCards(): void {
+		// Helper to redraw cards in a collection
+		const redrawCards = (cards: Card[], faceDown: boolean) => {
+			for (const card of cards) {
+				const oldX = card.container.x;
+				const oldY = card.container.y;
+				const oldZIndex = card.container.zIndex;
+
+				card.container.destroy();
+				card.container = this.createCardContainer(card.suit, card.rank, faceDown);
+				card.container.x = oldX;
+				card.container.y = oldY;
+				card.container.zIndex = oldZIndex;
+				card.container.on('pointerdown', () => this.handleCardClick(card));
+				card.container.on('pointerover', () => this.handleCardHover(card, true));
+				card.container.on('pointerout', () => this.handleCardHover(card, false));
+				this.app.stage.addChild(card.container);
+			}
+		};
+
+		// Redraw each collection with appropriate face state
+		redrawCards(this.deck, true);
+		redrawCards(this.stack, false);
+		redrawCards(this.playerHand, this.gamePhase === 'selecting-hidden-reserve');
+		redrawCards(this.playerHiddenReserve, true);
+		this.playerVisibleReserve.forEach(p => redrawCards(p.cards, false));
+		redrawCards(this.computerHand, true);
+		redrawCards(this.computerHiddenReserve, true);
+		this.computerVisibleReserve.forEach(p => redrawCards(p.cards, false));
+	}
+
 	constructor() {
 		this.app = new Application();
 		this.statusText = new Text();
@@ -157,6 +221,9 @@ class CardGame {
 		this.app.stage.hitArea = new Rectangle(0, 0, this.app.screen.width, this.app.screen.height);
 
 		container.appendChild(this.app.canvas);
+
+		// Calculate initial scale based on screen size
+		this.calculateScale();
 
 		this.app.stage.addChild(this.deckContainer);
 		this.app.stage.addChild(this.stackContainer);
@@ -315,6 +382,16 @@ class CardGame {
 		this.animatingCards.clear();
 		// Update hitArea to match new canvas size
 		this.app.stage.hitArea = new Rectangle(0, 0, this.app.screen.width, this.app.screen.height);
+
+		// Recalculate scale and redraw cards if scale changed
+		const oldScale = this.scale;
+		this.calculateScale();
+		if (Math.abs(this.scale - oldScale) > 0.001) {
+			this.redrawAllCards();
+			this.updateDeckDisplay();
+			this.updateStackDisplay();
+		}
+
 		this.positionUI();
 		this.positionDeckCards();
 		this.positionStackCards();
@@ -590,7 +667,7 @@ class CardGame {
 
 		this.scrollInterval = window.setInterval(() => {
 			const screenWidth = this.app.screen.width;
-			const totalWidth = (this.playerHand.length - 1) * CARD_SPACING + CARD_WIDTH;
+			const totalWidth = (this.playerHand.length - 1) * this.cardSpacing + this.cardWidth;
 
 			// Calculate scroll bounds:
 			// maxScrollOffset = 0: leftmost card fully visible at left edge
@@ -625,7 +702,7 @@ class CardGame {
 		}
 
 		// Calculate total width and bounds
-		const totalWidth = (this.playerHand.length - 1) * CARD_SPACING + CARD_WIDTH;
+		const totalWidth = (this.playerHand.length - 1) * this.cardSpacing + this.cardWidth;
 
 		// If cards fit on screen, don't show arrows
 		if (totalWidth <= screenWidth) {
@@ -647,7 +724,7 @@ class CardGame {
 		}
 		this.leftScrollArrow.visible = canScrollLeft;
 		this.leftScrollArrow.x = 10;
-		this.leftScrollArrow.y = screenHeight - CARD_HEIGHT * UNSELECTED_VISIBLE / 2 - this.leftScrollArrow.height / 2;
+		this.leftScrollArrow.y = screenHeight - this.cardHeight * UNSELECTED_VISIBLE / 2 - this.leftScrollArrow.height / 2;
 
 		// Show right arrow if we can scroll right (offset can decrease toward min)
 		const canScrollRight = this.handScrollOffset > minScrollOffset + 1;
@@ -656,7 +733,7 @@ class CardGame {
 		}
 		this.rightScrollArrow.visible = canScrollRight;
 		this.rightScrollArrow.x = screenWidth - 70;
-		this.rightScrollArrow.y = screenHeight - CARD_HEIGHT * UNSELECTED_VISIBLE / 2 - this.rightScrollArrow.height / 2;
+		this.rightScrollArrow.y = screenHeight - this.cardHeight * UNSELECTED_VISIBLE / 2 - this.rightScrollArrow.height / 2;
 	}
 
 	private createStatusText(): void {
@@ -740,25 +817,25 @@ class CardGame {
 
 		// Position deck on the right side of center
 		this.deckContainer.x = screenWidth / 2 + 80;
-		this.deckContainer.y = screenHeight / 2 - CARD_HEIGHT / 2;
+		this.deckContainer.y = screenHeight / 2 - this.cardHeight / 2;
 
 		// Position stack on the left side of center
-		this.stackContainer.x = screenWidth / 2 - CARD_WIDTH - 80;
-		this.stackContainer.y = screenHeight / 2 - CARD_HEIGHT / 2;
+		this.stackContainer.x = screenWidth / 2 - this.cardWidth - 80;
+		this.stackContainer.y = screenHeight / 2 - this.cardHeight / 2;
 
 		this.playButton.x = screenWidth / 2 - 100;
 		this.playButton.y = screenHeight / 2 + 200;
 
 		// Player reserves: to the right of the deck
-		const rightGapSize = screenWidth - (this.deckContainer.x + CARD_WIDTH);
+		const rightGapSize = screenWidth - (this.deckContainer.x + this.cardWidth);
 
-		this.playerReserveBaseX = this.deckContainer.x + CARD_WIDTH + (rightGapSize - (3 * CARD_WIDTH + 40)) / 2;
+		this.playerReserveBaseX = this.deckContainer.x + this.cardWidth + (rightGapSize - (3 * this.cardWidth + 40)) / 2;
 		this.playerReserveBaseY = this.deckContainer.y;
 
 		// Computer reserves: to the left of the stack
 		const leftGapSize = this.stackContainer.x;
 
-		this.computerReserveBaseX = (leftGapSize - (3 * CARD_WIDTH + 40)) / 2;
+		this.computerReserveBaseX = (leftGapSize - (3 * this.cardWidth + 40)) / 2;
 		this.computerReserveBaseY = this.stackContainer.y;
 
 		// Reposition reserve cards when UI changes
@@ -808,13 +885,13 @@ class CardGame {
 
 		// Card shadow
 		const shadow = new Graphics();
-		shadow.roundRect(4, 4, CARD_WIDTH, CARD_HEIGHT, CARD_RADIUS);
+		shadow.roundRect(4, 4, this.cardWidth, this.cardHeight, this.cardRadius);
 		shadow.fill({ color: 0x000000, alpha: 0.2 });
 		container.addChild(shadow);
 
 		// Card background - ADD THIS FIRST
 		const background = new Graphics();
-		background.roundRect(0, 0, CARD_WIDTH, CARD_HEIGHT, CARD_RADIUS);
+		background.roundRect(0, 0, this.cardWidth, this.cardHeight, this.cardRadius);
 
 		if (faceDown) {
 			// Face down - blue pattern
@@ -823,14 +900,15 @@ class CardGame {
 			container.addChild(background);
 
 			// Add decorative pattern on top
+			const patternInset = 10 * this.scale;
 			const pattern = new Graphics();
-			pattern.rect(10, 10, CARD_WIDTH - 20, CARD_HEIGHT - 20);
+			pattern.rect(patternInset, patternInset, this.cardWidth - patternInset * 2, this.cardHeight - patternInset * 2);
 			pattern.stroke({ color: 0x3b82f6, width: 2 });
 
-			pattern.moveTo(CARD_WIDTH / 2, 10);
-			pattern.lineTo(CARD_WIDTH / 2, CARD_HEIGHT - 10);
-			pattern.moveTo(10, CARD_HEIGHT / 2);
-			pattern.lineTo(CARD_WIDTH - 10, CARD_HEIGHT / 2);
+			pattern.moveTo(this.cardWidth / 2, patternInset);
+			pattern.lineTo(this.cardWidth / 2, this.cardHeight - patternInset);
+			pattern.moveTo(patternInset, this.cardHeight / 2);
+			pattern.lineTo(this.cardWidth - patternInset, this.cardHeight / 2);
 			pattern.stroke({ color: 0x3b82f6, width: 2 });
 
 			container.addChild(pattern);
@@ -847,51 +925,51 @@ class CardGame {
 			// Top-left rank
 			const textStyle = new TextStyle({
 				fontFamily: 'Arial, sans-serif',
-				fontSize: 28,
+				fontSize: this.fontSizeRank,
 				fontWeight: 'bold',
 				fill: color,
 			});
 			const topRank = new Text({ text: rankStr, style: textStyle });
-			topRank.x = 10;
-			topRank.y = 8;
+			topRank.x = 10 * this.scale;
+			topRank.y = 8 * this.scale;
 			container.addChild(topRank);
 
 			// Top-left suit
 			const smallSuitStyle = new TextStyle({
 				fontFamily: 'Arial, sans-serif',
-				fontSize: 20,
+				fontSize: this.fontSizeSuitSmall,
 				fill: color,
 			});
 			const topSuit = new Text({ text: suitSymbol, style: smallSuitStyle });
-			topSuit.x = 12;
-			topSuit.y = 36;
+			topSuit.x = 12 * this.scale;
+			topSuit.y = 36 * this.scale;
 			container.addChild(topSuit);
 
 			// Center suit
 			const centerSuitStyle = new TextStyle({
 				fontFamily: 'Arial, sans-serif',
-				fontSize: 56,
+				fontSize: this.fontSizeSuitCenter,
 				fill: color,
 			});
 			const centerSuit = new Text({ text: suitSymbol, style: centerSuitStyle });
 			centerSuit.anchor.set(0.5);
-			centerSuit.x = CARD_WIDTH / 2;
-			centerSuit.y = CARD_HEIGHT / 2;
+			centerSuit.x = this.cardWidth / 2;
+			centerSuit.y = this.cardHeight / 2;
 			container.addChild(centerSuit);
 
 			// Bottom-right rank
 			const bottomRank = new Text({ text: rankStr, style: textStyle });
 			bottomRank.anchor.set(0, 0);
-			bottomRank.x = CARD_WIDTH - 10;
-			bottomRank.y = CARD_HEIGHT - 36;
+			bottomRank.x = this.cardWidth - 10 * this.scale;
+			bottomRank.y = this.cardHeight - 36 * this.scale;
 			bottomRank.rotation = Math.PI;
 			container.addChild(bottomRank);
 
 			// Bottom-right suit
 			const bottomSuit = new Text({ text: suitSymbol, style: smallSuitStyle });
 			bottomSuit.anchor.set(0, 0);
-			bottomSuit.x = CARD_WIDTH - 12;
-			bottomSuit.y = CARD_HEIGHT - 8;
+			bottomSuit.x = this.cardWidth - 12 * this.scale;
+			bottomSuit.y = this.cardHeight - 8 * this.scale;
 			bottomSuit.rotation = Math.PI;
 			container.addChild(bottomSuit);
 		}
@@ -1375,13 +1453,13 @@ class CardGame {
 		this.deckContainer.addChild(this.deckText);
 
 		const placeholder = new Graphics();
-		placeholder.roundRect(0, 0, CARD_WIDTH, CARD_HEIGHT, CARD_RADIUS);
+		placeholder.roundRect(0, 0, this.cardWidth, this.cardHeight, this.cardRadius);
 		placeholder.stroke({ color: 0xffffff, width: 2, alpha: 0.5 });
 		this.deckContainer.addChildAt(placeholder, 0);
 
 		this.deckText.text = `${this.deck.length}`;
-		this.deckText.y = CARD_HEIGHT + 10;
-		this.deckText.x = CARD_WIDTH / 2;
+		this.deckText.y = this.cardHeight + 10;
+		this.deckText.x = this.cardWidth / 2;
 	}
 
 	private updateStackDisplay(): void {
@@ -1390,13 +1468,13 @@ class CardGame {
 
 		// Background placeholder
 		const placeholder = new Graphics();
-		placeholder.roundRect(0, 0, CARD_WIDTH, CARD_HEIGHT, CARD_RADIUS);
+		placeholder.roundRect(0, 0, this.cardWidth, this.cardHeight, this.cardRadius);
 		placeholder.stroke({ color: 0xffffff, width: 2, alpha: 0.5 });
 		this.stackContainer.addChildAt(placeholder, 0);
 
 		this.stackText.text = `${this.stack.length}`;
-		this.stackText.y = CARD_HEIGHT + 10;
-		this.stackText.x = CARD_WIDTH / 2;
+		this.stackText.y = this.cardHeight + 10;
+		this.stackText.x = this.cardWidth / 2;
 	}
 
 	private flipCardFaceUp(card: Card): void {
@@ -1448,16 +1526,16 @@ class CardGame {
 		const screenWidth = this.app.screen.width;
 		const screenHeight = this.app.screen.height;
 
-		const playerTotalWidth = (this.playerHand.length - 1) * CARD_SPACING + CARD_WIDTH;
+		const playerTotalWidth = (this.playerHand.length - 1) * this.cardSpacing + this.cardWidth;
 		const centerOffset = (screenWidth - playerTotalWidth) / 2;
 		const playerStartX = playerTotalWidth <= screenWidth ? centerOffset : this.handScrollOffset;
-		const playerBaseY = screenHeight - CARD_HEIGHT * UNSELECTED_VISIBLE;
+		const playerBaseY = screenHeight - this.cardHeight * UNSELECTED_VISIBLE;
 
 		this.playerHand.forEach((card, index) => {
-			const targetX = playerStartX + index * CARD_SPACING;
+			const targetX = playerStartX + index * this.cardSpacing;
 			let targetY = playerBaseY;
-			if (card.selected) targetY -= SELECTED_RISE;
-			else if (card.hovered) targetY -= HOVER_RISE;
+			if (card.selected) targetY -= this.selectedRise;
+			else if (card.hovered) targetY -= this.hoverRise;
 
 			if (immediate) {
 				card.container.x = targetX;
@@ -1467,12 +1545,12 @@ class CardGame {
 			}
 		});
 
-		const computerTotalWidth = (this.computerHand.length - 1) * CARD_SPACING + CARD_WIDTH;
+		const computerTotalWidth = (this.computerHand.length - 1) * this.cardSpacing + this.cardWidth;
 		const computerStartX = (screenWidth - computerTotalWidth) / 2;
-		const computerBaseY = -CARD_HEIGHT * (1 - COMPUTER_HAND_VISIBLE);
+		const computerBaseY = -this.cardHeight * (1 - COMPUTER_HAND_VISIBLE);
 
 		this.computerHand.forEach((card, index) => {
-			const targetX = computerStartX + index * CARD_SPACING;
+			const targetX = computerStartX + index * this.cardSpacing;
 			let targetY = computerBaseY;
 
 			if (immediate) {
@@ -1541,7 +1619,7 @@ class CardGame {
 	private positionReserveCards(immediate = false): void {
 		// Position player's hidden reserve (3 cards in a row)
 		this.playerHiddenReserve.forEach((card, index) => {
-			const targetX = this.playerReserveBaseX + index * RESERVE_SPACING;
+			const targetX = this.playerReserveBaseX + index * this.reserveSpacing;
 			const targetY = this.playerReserveBaseY;
 			card.container.zIndex = 0;
 
@@ -1556,9 +1634,9 @@ class CardGame {
 		// Position player's visible reserve (stacked on top of hidden reserve)
 		this.playerVisibleReserve.forEach((placement, pileIndex) => {
 			placement.cards.forEach((card, cardIndex) => {
-				const targetX = this.playerReserveBaseX + pileIndex * RESERVE_SPACING;
+				const targetX = this.playerReserveBaseX + pileIndex * this.reserveSpacing;
 				// Stack cards downward, with each card peeking out
-				const targetY = this.playerReserveBaseY + cardIndex * RESERVE_CARD_PEEK;
+				const targetY = this.playerReserveBaseY + cardIndex * this.reserveCardPeek;
 				card.container.zIndex = 10 + cardIndex;
 
 				if (immediate) {
@@ -1572,7 +1650,7 @@ class CardGame {
 
 		// Position computer's hidden reserve
 		this.computerHiddenReserve.forEach((card, index) => {
-			const targetX = this.computerReserveBaseX + index * RESERVE_SPACING;
+			const targetX = this.computerReserveBaseX + index * this.reserveSpacing;
 			const targetY = this.computerReserveBaseY;
 			card.container.zIndex = 0;
 
@@ -1587,8 +1665,8 @@ class CardGame {
 		// Position computer's visible reserve
 		this.computerVisibleReserve.forEach((placement, pileIndex) => {
 			placement.cards.forEach((card, cardIndex) => {
-				const targetX = this.computerReserveBaseX + pileIndex * RESERVE_SPACING;
-				const targetY = this.computerReserveBaseY + cardIndex * RESERVE_CARD_PEEK;
+				const targetX = this.computerReserveBaseX + pileIndex * this.reserveSpacing;
+				const targetY = this.computerReserveBaseY + cardIndex * this.reserveCardPeek;
 				card.container.zIndex = 10 + cardIndex;
 
 				if (immediate) {

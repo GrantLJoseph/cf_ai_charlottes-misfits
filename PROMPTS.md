@@ -228,3 +228,9 @@ I get spammed with infinite redirects when I try to login as admin. The worker l
 
 # 58
 The game has never repositioned properly when the window resizes or the browser dev tools are opened. It doesn't resize until the user mouses over a card. Even then, some of the UI elements, mainly the stack and deck background rects, don't readjust at all.
+
+# 59
+Most of the game graphics do not scale with screen size. The cards, for example, are the same size no matter the screen size. This makes the game completely unplayable outside desktop- or laptop-style screens. Make **everything** scale with screen size while keeping the current sizes when played on a typical 16:9 monitor.
+
+# 60
+The text isn't scaling with screen size. It makes the numbers/letters on the backs of cards too large.
