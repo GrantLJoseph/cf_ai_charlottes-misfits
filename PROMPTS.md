@@ -168,3 +168,6 @@ The cards in the hand still react to my hover when I'm hovering over the bottom 
 
 # 38
 That did not work.
+
+# 39
+Log the specific cards both sides play into the chat and status text so the text can act as a move history.

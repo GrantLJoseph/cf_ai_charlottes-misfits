@@ -171,6 +171,27 @@ function rankToString(rank: number): string {
 	return rank.toString();
 }
 
+function rankToFullString(rank: number): string {
+	if (rank === 14) return 'Ace';
+	if (rank === 13) return 'King';
+	if (rank === 12) return 'Queen';
+	if (rank === 11) return 'Jack';
+	return rank.toString();
+}
+
+function formatCard(card: { suit: string; rank: number }): string {
+	return `${rankToFullString(card.rank)} of ${card.suit}`;
+}
+
+function formatCards(cards: Array<{ suit: string; rank: number }>): string {
+	if (cards.length === 0) return 'nothing';
+	if (cards.length === 1) return formatCard(cards[0]);
+	if (cards.length === 2) return `${formatCard(cards[0])} and ${formatCard(cards[1])}`;
+	const last = cards[cards.length - 1];
+	const rest = cards.slice(0, -1).map(formatCard).join(', ');
+	return `${rest}, and ${formatCard(last)}`;
+}
+
 // Initialize chat system
 let chatSystem;
 
@@ -971,7 +992,9 @@ class CardGame {
 		} else if (this.gamePhase === 'player-turn') {
 			// Taking stack
 			if (card === this.stack[this.stack.length - 1]) {
+				const stackSize = this.stack.length;
 				this.takeStack(this.playerHand);
+				this.updateStatus(`You picked up the stack (${stackSize} cards)`, true);
 
 				this.updateStackDisplay();
 				this.positionCards();
@@ -983,6 +1006,7 @@ class CardGame {
 				this.playerHand.push(card);
 				this.flipCardFaceUp(card);
 				this.playerHiddenReserve = this.playerHiddenReserve.filter(c => c !== card);
+				this.updateStatus(`You revealed ${formatCard(card)} from hidden reserve`, true);
 				this.positionCards();
 				this.saveGameState();
 			}
@@ -1128,6 +1152,10 @@ class CardGame {
 
 		if (!placement || !this.canPlayOnStack(placement)) return;
 
+		// Log the play
+		const cardsDescription = formatCards(placement.cards);
+		this.updateStatus(`You played ${cardsDescription}`, true);
+
 		this.playOnStack(placement);
 		this.playerHand = this.playerHand.filter(c => !c.selected);
 
@@ -1198,13 +1226,18 @@ class CardGame {
 				const selectedCards = this.computerHand.filter((c, index) => action.indexes!.includes(index));
 				this.computerHand = this.computerHand.filter(c => !selectedCards.includes(c));
 				const placement = this.validatePlacement(selectedCards)!;
+
+				// Log the play with specific cards
+				const cardsDescription = formatCards(placement.cards);
+				this.updateStatus(`Computer played ${cardsDescription}`, true);
+
 				this.playOnStack(placement);
 
 				// Check for Ace - clears stack and computer plays again
 				const hasAce = placement.cards.some(c => c.rank === 14);
 				if (hasAce) {
 					this.discardStack();
-					this.updateStatus('Computer played Ace! Stack cleared. They play again.', true);
+					this.updateStatus('Ace! Stack cleared. Computer plays again.', true);
 					this.updateStackDisplay();
 					this.positionCards();
 					this.drawToMinimum(this.computerHand);
@@ -1212,13 +1245,13 @@ class CardGame {
 					return;
 				}
 
-				this.updateStatus('Computer played a card', true);
 				this.drawToMinimum(this.computerHand);
 				break;
 			}
 			case 'stack': {
+				const stackSize = this.stack.length;
 				this.takeStack(this.computerHand);
-				this.updateStatus('Computer picked up the stack', true);
+				this.updateStatus(`Computer picked up the stack (${stackSize} cards)`, true);
 				break;
 			}
 			case 'hidden': {
@@ -1230,12 +1263,12 @@ class CardGame {
 
 					if (this.canPlayOnStack(placement)) {
 						this.playOnStack(placement);
-						this.updateStatus('Computer played from hidden reserve', true);
+						this.updateStatus(`Computer revealed and played ${formatCard(card)} from hidden reserve`, true);
 
 						// Check for Ace
 						if (card.rank === 14) {
 							this.discardStack();
-							this.updateStatus('Computer played Ace from hidden reserve! Stack cleared. They play again.', true);
+							this.updateStatus('Ace! Stack cleared. Computer plays again.', true);
 							this.updateStackDisplay();
 							this.positionCards();
 							this.positionReserveCards();
@@ -1244,10 +1277,11 @@ class CardGame {
 						}
 					} else {
 						// Card can't be played, computer takes the stack plus the revealed card
+						const stackSize = this.stack.length;
 						this.flipCardFaceDown(card);
 						this.computerHand.push(card);
 						this.takeStack(this.computerHand);
-						this.updateStatus('Computer revealed a card they couldn\'t play and picked up the stack', true);
+						this.updateStatus(`Computer revealed ${formatCard(card)} but couldn't play it - picked up the stack (${stackSize} cards)`, true);
 					}
 				}
 				break;
