@@ -1,4 +1,4 @@
-import { Application, Container, Graphics, Text, TextStyle, FederatedPointerEvent } from 'pixi.js';
+import { Application, Container, Graphics, Text, TextStyle, FederatedPointerEvent, Rectangle } from 'pixi.js';
 import {assert} from "vitest";
 
 class Chat {
@@ -354,6 +354,8 @@ class CardGame {
 	private setupResizeHandler(): void {
 		window.addEventListener('resize', () => {
 			this.animatingCards.clear();
+			// Update hitArea to match new canvas size
+			this.app.stage.hitArea = new Rectangle(0, 0, this.app.screen.width, this.app.screen.height);
 			this.positionUI();
 			this.positionDeckCards();
 			this.positionStackCards();
@@ -517,16 +519,20 @@ class CardGame {
 	}
 
 	async init(): Promise<void> {
+		const container = document.getElementById('game-container');
+		if (!container) throw Error('Cannot get game container');
+
 		await this.app.init({
 			background: '#1a472a',
-			resizeTo: window,
+			resizeTo: container,
 			antialias: true,
 		});
 
-		initChat();
+		// Limit event detection to canvas bounds
+		this.app.stage.eventMode = 'static';
+		this.app.stage.hitArea = new Rectangle(0, 0, this.app.screen.width, this.app.screen.height);
 
-		const container = document.getElementById('game-container');
-		if (!container) throw Error('Cannot get game container');
+		initChat();
 		container.appendChild(this.app.canvas);
 
 		// Don't use handContainer anymore - add all cards directly to stage

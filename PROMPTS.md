@@ -159,3 +159,12 @@ Instead of throwing when GPT-OSS experiences an error, it should gracefully retr
 
 # 35
 The full, exact JSON schema needs to be validated in the model's response. Any deviations should trigger the retry mechanism.
+
+# 36
+Currently, the bottom bar of the game page's HTML covers part of the game canvas; the canvas still touches the bottom of the page instead of stopping at the bar. Fix this.
+
+# 37
+The cards in the hand still react to my hover when I'm hovering over the bottom bar.
+
+# 38
+That did not work.
