@@ -1,4 +1,5 @@
 import { Application, Container, Graphics, Text, TextStyle, FederatedPointerEvent } from 'pixi.js';
+import {assert} from "vitest";
 
 class Chat {
 	private popup: HTMLElement;
@@ -93,7 +94,6 @@ class Chat {
 interface SerializedCard {
 	suit: 'hearts' | 'diamonds' | 'clubs' | 'spades';
 	rank: number;
-	id: string;
 }
 
 interface SerializedPlacement {
@@ -118,7 +118,6 @@ interface GameState {
 interface Card {
 	suit: 'hearts' | 'diamonds' | 'clubs' | 'spades';
 	rank: number; // 2-14 (11=Jack, 12=Queen, 13=King, 14=Ace)
-	id: string;
 	container: Container;
 	selected: boolean;
 	hovered: boolean;
@@ -249,6 +248,11 @@ function initChat(): void {
 	});
 }
 
+interface Action {
+	action: 'play' | 'stack' | 'hidden';
+	indexes: number[] | null;
+}
+
 class CardGame {
 	private app: Application;
 	private animatingCards: Map<Container, number> = new Map();
@@ -320,9 +324,29 @@ class CardGame {
 				break;
 			case 'state-saved':
 				console.log('Game state saved to server');
+
+				if (this.gamePhase === 'computer-turn')
+					this.socket.send(JSON.stringify({ type: 'action-req' }));
+
 				break;
 			case 'state-cleared':
 				console.log('Game state cleared from server');
+				break;
+
+			case 'action-res':
+				this.computerTurn(data.action);
+				break;
+
+			case 'action-error':
+				console.error('AI error:', data.error);
+				addChatMessage(`Computer encountered an error: ${data.error}`, 'system');
+				// Fall back to computer picking up the stack
+				this.takeStack(this.computerHand);
+				this.updateStatus('Computer had trouble thinking and picked up the stack', true);
+				this.updateStackDisplay();
+				this.positionCards();
+				this.startPlayerTurn();
+				this.saveGameState();
 				break;
 		}
 	}
@@ -343,7 +367,6 @@ class CardGame {
 		return {
 			suit: card.suit,
 			rank: card.rank,
-			id: card.id
 		};
 	}
 
@@ -391,7 +414,6 @@ class CardGame {
 		const card: Card = {
 			suit: serialized.suit,
 			rank: serialized.rank,
-			id: serialized.id,
 			container,
 			selected: false,
 			hovered: false
@@ -486,7 +508,7 @@ class CardGame {
 				break;
 			case 'computer-turn':
 				this.updateStatus('Computer is thinking...', false);
-				setTimeout(() => this.computerTurn(), 1000);
+				this.startComputerTurn();
 				break;
 			case 'game-over':
 				// Don't change status, it should already show win/lose
@@ -807,7 +829,6 @@ class CardGame {
 		const card: Card = {
 			suit,
 			rank,
-			id: `${suit}-${rank}-${Math.random()}`,
 			container,
 			selected: false,
 			hovered: false
@@ -949,7 +970,7 @@ class CardGame {
 				this.updateStackDisplay();
 				this.positionCards();
 
-				this.saveGameState();
+				// startComputerTurn() calls saveGameState() which triggers action-req
 				this.startComputerTurn();
 			// Drawing from hidden reserve
 			} else if (this.playerHand.length == 0 && this.deck.length == 0 && this.playerVisibleReserve.length == 0 && this.playerHiddenReserve.includes(card)) {
@@ -1106,25 +1127,25 @@ class CardGame {
 
 		this.drawToMinimum(this.playerHand);
 
+		this.playButton.visible = false;
+		this.positionCards();
+		this.updateStackDisplay();
+		this.updateDeckDisplay();
+
 		// Check for Aces - they clear the stack
 		const hasAce = placement.cards.some(c => c.rank === 14);
 		if (hasAce) {
 			this.discardStack();
 			this.updateStatus('Ace! Stack cleared. Play again!', true);
 			// Player goes again - stay in player-turn phase
+			this.saveGameState();
 		} else {
 			// Check if player is out of cards
 			if (this.checkWinCondition()) return;
 
+			// startComputerTurn() calls saveGameState() which triggers action-req
 			this.startComputerTurn();
 		}
-
-		this.playButton.visible = false;
-		this.positionCards();
-		this.updateStackDisplay();
-		this.updateDeckDisplay();
-
-		this.saveGameState();
 	}
 
 	private computerMakesVisibleReserve(): void {
@@ -1158,58 +1179,71 @@ class CardGame {
 
 	private startComputerTurn(): void {
 		this.gamePhase = 'computer-turn';
-		setTimeout(() => this.computerTurn(), 1000);
+		this.updateStatus('Computer is thinking...', false);
+		this.drawToMinimum(this.computerHand);
+		this.saveGameState();
 	}
 
-	private computerTurn(): void {
-		this.drawToMinimum(this.computerHand);
+	private computerTurn(action: Action): void {
+		console.log(action);
 
-		// Stub: computer tries to play a random card or picks up stack
-		if (this.computerHand.length === 0) {
-			// Computer needs to use visible reserve
-			if (this.computerVisibleReserve.length > 0) {
-				this.computerVisibleReserve.forEach(placement => {
-					this.computerHand.push(...placement.cards);
-					this.computerVisibleReserve = [];
-					this.updateStatus("Computer took their visible reserve", true);
-				});
-			} else if (this.computerHiddenReserve.length > 0) {
-				// Use hidden reserve
-				const card = this.computerHiddenReserve.pop()!;
-				const placement = { cards: [card], type: 'single' as const };
-
-				this.computerHand.push(...placement.cards);
-
-				this.updateStatus("Computer drew from hidden reserve", true);
-				this.updateStackDisplay();
-				this.positionCards();
-			}
-		}
-
-		// Try to play any card
-		let played = false;
-		for (let i = 0; i < this.computerHand.length; i++) {
-			const card = this.computerHand[i];
-			const placement = { cards: [card], type: 'single' as const };
-
-			if (this.canPlayOnStack(placement)) {
+		switch (action.action) {
+			case 'play': {
+				const selectedCards = this.computerHand.filter((c, index) => action.indexes!.includes(index));
+				this.computerHand = this.computerHand.filter(c => !selectedCards.includes(c));
+				const placement = this.validatePlacement(selectedCards)!;
 				this.playOnStack(placement);
-				this.computerHand.splice(i, 1);
-				played = true;
 
-				// Check for Ace
-				if (card.rank === 14) {
+				// Check for Ace - clears stack and computer plays again
+				const hasAce = placement.cards.some(c => c.rank === 14);
+				if (hasAce) {
 					this.discardStack();
-
-					this.stack = [];
-					// Computer goes again
-
 					this.updateStatus('Computer played Ace! Stack cleared. They play again.', true);
-
-					setTimeout(() => this.computerTurn(), 1000);
+					this.updateStackDisplay();
+					this.positionCards();
+					this.drawToMinimum(this.computerHand);
+					this.saveGameState(); // This will trigger another action-req
 					return;
 				}
 
+				this.updateStatus('Computer played a card', true);
+				this.drawToMinimum(this.computerHand);
+				break;
+			}
+			case 'stack': {
+				this.takeStack(this.computerHand);
+				this.updateStatus('Computer picked up the stack', true);
+				break;
+			}
+			case 'hidden': {
+				const hiddenIndex = action.indexes?.[0] ?? 0;
+				const card = this.computerHiddenReserve.splice(hiddenIndex, 1)[0];
+				if (card) {
+					this.flipCardFaceUp(card);
+					const placement = { cards: [card], type: 'single' as const };
+
+					if (this.canPlayOnStack(placement)) {
+						this.playOnStack(placement);
+						this.updateStatus('Computer played from hidden reserve', true);
+
+						// Check for Ace
+						if (card.rank === 14) {
+							this.discardStack();
+							this.updateStatus('Computer played Ace from hidden reserve! Stack cleared. They play again.', true);
+							this.updateStackDisplay();
+							this.positionCards();
+							this.positionReserveCards();
+							this.saveGameState();
+							return;
+						}
+					} else {
+						// Card can't be played, computer takes the stack plus the revealed card
+						this.flipCardFaceDown(card);
+						this.computerHand.push(card);
+						this.takeStack(this.computerHand);
+						this.updateStatus('Computer revealed a card they couldn\'t play and picked up the stack', true);
+					}
+				}
 				break;
 			}
 		}
@@ -1217,19 +1251,12 @@ class CardGame {
 		// Check win condition
 		if (this.checkWinCondition()) return;
 
-		if (!played) {
-			// Pick up stac
-			this.takeStack(this.computerHand);
-			this.updateStatus('Computer picked up the stack', true);
-		} else {
-			this.drawToMinimum(this.computerHand);
-			this.updateStatus('Computer played a card', true);
-		}
-
-		this.gamePhase = 'player-turn';
 		this.updateStackDisplay();
 		this.updateDeckDisplay();
+		this.positionCards();
+		this.positionReserveCards();
 
+		this.startPlayerTurn();
 		this.saveGameState();
 	}
 
@@ -1273,6 +1300,8 @@ class CardGame {
 	}
 
 	private playOnStack(placement: Placement): void {
+		placement.cards.sort((a, b) => a.rank - b.rank);
+
 		// Add cards to stack and animate them to stack position
 		placement.cards.forEach(card => {
 			this.stack.push(card);

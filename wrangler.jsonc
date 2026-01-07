@@ -36,5 +36,18 @@
 				"class_name": "GameDataServer"
 			}
 		]
+	},
+
+	"migrations": [
+		{
+			"tag": "<v1>",
+			"new_sqlite_classes": [
+				"GameDataServer"
+			]
+		}
+	],
+
+	"ai": {
+		"binding": "AI"
 	}
 }

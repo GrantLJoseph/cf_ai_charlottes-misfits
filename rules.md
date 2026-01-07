@@ -26,4 +26,3 @@ When the deck is empty, players are unable to draw cards after placing to refill
 When their hand is empty and their visible reserve is gone, the player's turn consists of choosing one card from their hidden reserve to attempt to place. If the one card revealed is illegal to place, the player must take the stack into their hand.
 
 The first player to run out of cards completely, exhausting the deck, and both of their reserves, wins.
-

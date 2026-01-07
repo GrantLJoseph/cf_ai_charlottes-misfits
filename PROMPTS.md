@@ -127,3 +127,35 @@ Just the visible state should be synced between the client and server. This incl
 Loading the game state from the server's data only occurs on page load, not while playing. Update the server state on every move played so that the user can at any time log out and come back.
 
 When the game ends, clear the state on the server. The end win/lose screen does not need to sync.
+
+# 28
+In src/index.ts, why can the Worker's AI model not meet my JSON schema? It crashes at runtime saying the JSON model couldn't be met.
+
+# 29
+Excellent. The project is almost complete. I just need you to fix the GPT OSS interaction. The current version is my attempt at reworking my previous Llama integration that wasn't smart enough.
+
+# 30
+The finalAction is empty.
+
+# 31
+It responded with the correct move, which is a wonderful start. But the code crashed at runtime with these errors
+
+✘ [ERROR] Uncaught SyntaxError: Unexpected token 'W', "We need to"... is not valid JSON Error
+
+      at webSocketMessage
+(file:///home/grant/src/cloudflare/test_worker1/my-first-worker/src/index.ts:338:28)
+
+
+✘ [ERROR] Uncaught SyntaxError: Unexpected token 'W', "We need to"... is not valid JSON
+
+# 32
+That seems to work now. Double-check my work in the frontend, largly in computerTurn(), to make sure the randomized computer actions are fully replaced properly with the AI input. The status text is also sometimes bugged when handling switching into and out of the computer's turn.
+
+# 33
+The computer keeps playing twice.
+
+# 34
+Instead of throwing when GPT-OSS experiences an error, it should gracefully retry. Also implement a 5-attempt cap on retries before the server sends the client an error.
+
+# 35
+The full, exact JSON schema needs to be validated in the model's response. Any deviations should trigger the retry mechanism.
