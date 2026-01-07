@@ -434,7 +434,7 @@ canvas {
 }
 
 .diagram-layout.horizontal .diagram-section {
-	flex-direction: row;
+	flex-direction: column;
 	gap: 8px;
 }
 

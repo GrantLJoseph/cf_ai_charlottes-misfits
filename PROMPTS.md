@@ -210,3 +210,12 @@ The rules popup header is still green. The diagram of the play area shows the pl
 
 # 52
 The scroll button triangles should have a larger square hitbox behind them so the user doesn't have to hover over the triangles specifically.
+
+# 53
+Replace the book icon for the rules button with a question mark icon. The setup diagram in the rules popup is wrong. The reserve cards should be just three cards in a horizontal line. Currently, the diagram shows 2 vertical stacks of 3.
+
+# 54
+Look at the screenshot of the game in game.png. Make the rules setup diagram match that. The player's reserve is on the right. The computer's reserve is on the left. The stack and deck are in the middle.
+
+# 55
+When the user logs in as the 'admin' user, instead of opening the game, it should take the user to a settings panel page. From this page, I can see all existing user accounts for the game and add and delete them.
