@@ -171,3 +171,12 @@ That did not work.
 
 # 39
 Log the specific cards both sides play into the chat and status text so the text can act as a move history.
+
+# 40
+Expand the chat system so that the user's messages are sent to GPT-OSS. The model's job isn't the same as when it makes plays, though. Its job is to be a helpful assistant and give advice to the player. It should only be able to see the player-visible state, primarily meaning no access to the computer's hand.
+
+# 41
+I refactored the code in minor ways and now now now cards display when the user first starts opens the game.
+
+# 42
+The card still don't load at the start. The text, stack and deck background rects, and size numbers do.

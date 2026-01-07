@@ -3,7 +3,7 @@
 	"version": "0.0.0",
 	"private": true,
 	"scripts": {
-		"build:frontend": "esbuild frontend/*.ts --bundle --outdir=dist --minify",
+		"build:frontend": "esbuild frontend/index.ts --bundle --outdir=dist --minify",
 		"deploy": "npm run build:frontend && wrangler deploy",
 		"dev": "npm run build:frontend && wrangler dev",
 		"start": "npm run build:frontend && wrangler dev",

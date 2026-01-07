@@ -1,94 +1,5 @@
-import { Application, Container, Graphics, Text, TextStyle, FederatedPointerEvent, Rectangle } from 'pixi.js';
-import {assert} from "vitest";
-
-class Chat {
-	private popup: HTMLElement;
-	private messagesContainer: HTMLElement;
-	private input: HTMLInputElement;
-	private sendButton: HTMLElement;
-	private toggleButton: HTMLElement;
-	private closeButton: HTMLElement;
-	private notificationDot: HTMLElement;
-	private isOpen: boolean = false;
-
-	constructor() {
-		this.popup = document.getElementById('chat-popup')!;
-		this.messagesContainer = document.getElementById('chat-messages')!;
-		this.input = document.getElementById('chat-input') as HTMLInputElement;
-		this.sendButton = document.getElementById('chat-send')!;
-		this.toggleButton = document.getElementById('chat-toggle')!;
-		this.closeButton = document.getElementById('chat-close')!;
-		this.notificationDot = document.getElementById('chat-notification')!;
-
-		this.setupEventListeners();
-	}
-
-	private setupEventListeners(): void {
-		this.toggleButton.addEventListener('click', () => this.toggle());
-		this.closeButton.addEventListener('click', () => this.close());
-		this.sendButton.addEventListener('click', () => this.sendPlayerMessage());
-		this.input.addEventListener('keydown', (e) => {
-			if (e.key === 'Enter') {
-				this.sendPlayerMessage();
-			}
-		});
-	}
-
-	toggle(): void {
-		if (this.isOpen) {
-			this.close();
-		} else {
-			this.open();
-		}
-	}
-
-	open(): void {
-		this.isOpen = true;
-		this.popup.classList.remove('chat-hidden');
-		this.clearNotification();
-		this.scrollToBottom();
-	}
-
-	close(): void {
-		this.isOpen = false;
-		this.popup.classList.add('chat-hidden');
-	}
-
-	private clearNotification(): void {
-		this.notificationDot.classList.remove('visible');
-	}
-
-	private showNotification(): void {
-		if (!this.isOpen) {
-			this.notificationDot.classList.add('visible');
-		}
-	}
-
-	private scrollToBottom(): void {
-		this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
-	}
-
-	private sendPlayerMessage(): void {
-		const text = this.input.value.trim();
-		if (!text) return;
-
-		this.addMessage(text, 'player');
-		this.input.value = '';
-	}
-
-	addMessage(text: string, type: 'system' | 'player' = 'system'): void {
-		const messageEl = document.createElement('div');
-		messageEl.className = `chat-message ${type}`;
-		messageEl.textContent = text;
-		this.messagesContainer.appendChild(messageEl);
-
-		if (type === 'system') {
-			this.showNotification();
-		}
-
-		this.scrollToBottom();
-	}
-}
+import { Application, Container, Graphics, Text, TextStyle, Rectangle } from 'pixi.js';
+import Chat from './chat';
 
 // Serializable card representation (without PixiJS container)
 interface SerializedCard {
@@ -163,112 +74,7 @@ const SUIT_COLORS = {
 	spades: '#1f2937'
 };
 
-function rankToString(rank: number): string {
-	if (rank === 14) return 'A';
-	if (rank === 13) return 'K';
-	if (rank === 12) return 'Q';
-	if (rank === 11) return 'J';
-	return rank.toString();
-}
-
-function rankToFullString(rank: number): string {
-	if (rank === 14) return 'Ace';
-	if (rank === 13) return 'King';
-	if (rank === 12) return 'Queen';
-	if (rank === 11) return 'Jack';
-	return rank.toString();
-}
-
-function formatCard(card: { suit: string; rank: number }): string {
-	return `${rankToFullString(card.rank)} of ${card.suit}`;
-}
-
-function formatCards(cards: Array<{ suit: string; rank: number }>): string {
-	if (cards.length === 0) return 'nothing';
-	if (cards.length === 1) return formatCard(cards[0]);
-	if (cards.length === 2) return `${formatCard(cards[0])} and ${formatCard(cards[1])}`;
-	const last = cards[cards.length - 1];
-	const rest = cards.slice(0, -1).map(formatCard).join(', ');
-	return `${rest}, and ${formatCard(last)}`;
-}
-
-// Initialize chat system
-let chatSystem;
-
-// Chat system
-let chatOpen = false;
-let hasUnreadMessages = false;
-
-export function addChatMessage(message: string, type: 'system' | 'player' = 'system'): void {
-	const messagesContainer = document.getElementById('chat-messages');
-	if (!messagesContainer) return;
-
-	const messageEl = document.createElement('div');
-	messageEl.className = `chat-message ${type}`;
-	messageEl.textContent = message;
-	messagesContainer.appendChild(messageEl);
-
-	// Auto-scroll to bottom
-	messagesContainer.scrollTop = messagesContainer.scrollHeight;
-
-	// Show notification dot if chat is closed and it's a system message
-	if (!chatOpen && type === 'system') {
-		hasUnreadMessages = true;
-		const notificationDot = document.getElementById('chat-notification');
-		if (notificationDot) {
-			notificationDot.classList.add('visible');
-		}
-	}
-}
-
-function initChat(): void {
-	const chatToggle = document.getElementById('chat-toggle');
-	const chatPopup = document.getElementById('chat-popup');
-	const chatClose = document.getElementById('chat-close');
-	const chatInput = document.getElementById('chat-input') as HTMLInputElement;
-	const chatSend = document.getElementById('chat-send');
-	const notificationDot = document.getElementById('chat-notification');
-
-	if (!chatToggle || !chatPopup || !chatClose || !chatInput || !chatSend) return;
-
-	// Toggle chat
-	chatToggle.addEventListener('click', () => {
-		chatOpen = !chatOpen;
-		chatPopup.classList.toggle('chat-hidden', !chatOpen);
-
-		if (chatOpen) {
-			// Clear notification
-			hasUnreadMessages = false;
-			if (notificationDot) {
-				notificationDot.classList.remove('visible');
-			}
-			chatInput.focus();
-		}
-	});
-
-	// Close button
-	chatClose.addEventListener('click', () => {
-		chatOpen = false;
-		chatPopup.classList.add('chat-hidden');
-	});
-
-	// Send message
-	const sendMessage = () => {
-		const message = chatInput.value.trim();
-		if (message) {
-			addChatMessage(message, 'player');
-			chatInput.value = '';
-		}
-	};
-
-	chatSend.addEventListener('click', sendMessage);
-	chatInput.addEventListener('keypress', (e) => {
-		if (e.key === 'Enter') {
-			sendMessage();
-		}
-	});
-}
-
+// Received from AI WS
 interface Action {
 	action: 'play' | 'stack' | 'hidden';
 	indexes: number[] | null;
@@ -277,9 +83,9 @@ interface Action {
 class CardGame {
 	private app: Application;
 	private animatingCards: Map<Container, number> = new Map();
+	private chat: Chat;
 
 	private socket: WebSocket;
-	private stateLoaded: boolean = false;
 
 	// Game state
 	private deck: Card[] = [];
@@ -320,7 +126,41 @@ class CardGame {
 		this.stackContainer = new Container();
 		this.leftScrollArrow = new Container();
 		this.rightScrollArrow = new Container();
+		this.chat = new Chat;
 		this.socket = new WebSocket("/game-data");
+	}
+
+	async init(): Promise<void> {
+		const container = document.getElementById('game-container');
+		if (!container) throw Error('Cannot get game container');
+
+		await this.app.init({
+			background: '#1a472a',
+			resizeTo: container,
+			antialias: true,
+		});
+
+		// Limit event detection to canvas bounds
+		this.app.stage.eventMode = 'static';
+		this.app.stage.hitArea = new Rectangle(0, 0, this.app.screen.width, this.app.screen.height);
+
+		container.appendChild(this.app.canvas);
+
+		this.app.stage.addChild(this.deckContainer);
+		this.app.stage.addChild(this.stackContainer);
+
+		// Create UI elements
+		this.createStatusText();
+		this.createDeckDisplay();
+		this.createStackDisplay();
+		this.createPlayButton();
+		this.createScrollArrows();
+
+		this.positionUI();
+
+		// Connect to server - game initialization happens in handleSocketMessage
+		this.socket.addEventListener("open", () => this.handleSocketOpen());
+		this.socket.addEventListener("message", (event) => this.handleSocketMessage(event));
 	}
 
 	private handleSocketOpen(): void {
@@ -333,15 +173,13 @@ class CardGame {
 		switch (data.type) {
 			case 'state-load':
 				this.loadGameState(data.state);
-				this.stateLoaded = true;
 				this.setupResizeHandler();
-				addChatMessage('Game restored from previous session.');
+				this.chat.addMessage('Game restored from previous session.');
 				break;
 			case 'state-none':
 				this.startNewGame();
-				this.stateLoaded = true;
 				this.setupResizeHandler();
-				addChatMessage('Hello, World! Welcome to the card game.');
+				this.chat.addMessage('Hello, World! Welcome to the card game.');
 				break;
 			case 'state-saved':
 				console.log('Game state saved to server');
@@ -360,7 +198,7 @@ class CardGame {
 
 			case 'action-error':
 				console.error('AI error:', data.error);
-				addChatMessage(`Computer encountered an error: ${data.error}`, 'system');
+				this.chat.addMessage(`Computer encountered an error: ${data.error}`, 'system');
 				// Fall back to computer picking up the stack
 				this.takeStack(this.computerHand);
 				this.updateStatus('Computer had trouble thinking and picked up the stack', true);
@@ -431,68 +269,78 @@ class CardGame {
 		}
 	}
 
-	// Rebuild a card from serialized data
-	private deserializeCard(serialized: SerializedCard, faceDown: boolean): Card {
-		const container = this.createCardContainer(serialized.suit, serialized.rank, faceDown);
-		const card: Card = {
-			suit: serialized.suit,
-			rank: serialized.rank,
-			container,
-			selected: false,
-			hovered: false
-		};
-
-		container.on('pointerdown', () => this.handleCardClick(card));
-		container.on('pointerover', () => this.handleCardHover(card, true));
-		container.on('pointerout', () => this.handleCardHover(card, false));
-
-		this.app.stage.addChild(card.container);
-
-		return card;
-	}
-
 	// Rebuild a placement from serialized data
 	private deserializePlacement(serialized: SerializedPlacement, faceDown: boolean): Placement {
 		return {
-			cards: serialized.cards.map(c => this.deserializeCard(c, faceDown)),
+			cards: serialized.cards.map(c => {
+				const card = this.createCard(c.suit, c.rank, faceDown);
+				this.app.stage.addChild(card.container);
+				return card;
+			}),
 			type: serialized.type
 		};
 	}
 
+	private rankToString(rank: number): string {
+		if (rank === 14) return 'A';
+		if (rank === 13) return 'K';
+		if (rank === 12) return 'Q';
+		if (rank === 11) return 'J';
+		return rank.toString();
+	}
+
+	private rankToFullString(rank: number): string {
+		if (rank === 14) return 'Ace';
+		if (rank === 13) return 'King';
+		if (rank === 12) return 'Queen';
+		if (rank === 11) return 'Jack';
+		return rank.toString();
+	}
+
+	private formatCard(card: { suit: string; rank: number }): string {
+		return `${this.rankToFullString(card.rank)} of ${card.suit}`;
+	}
+
+	private formatCards(cards: Array<{ suit: string; rank: number }>): string {
+		if (cards.length === 0) return 'nothing';
+		if (cards.length === 1) return this.formatCard(cards[0]);
+		if (cards.length === 2) return `${this.formatCard(cards[0])} and ${this.formatCard(cards[1])}`;
+		const last = cards[cards.length - 1];
+		const rest = cards.slice(0, -1).map(this.formatCard).join(', ');
+		return `${rest}, and ${this.formatCard(last)}`;
+	}
+
 	// Load game state from server
 	private loadGameState(state: GameState): void {
-		// Clear existing cards from stage
-		this.deck.forEach(c => c.container.destroy());
-		this.stack.forEach(c => c.container.destroy());
-		this.playerHand.forEach(c => c.container.destroy());
-		this.playerHiddenReserve.forEach(c => c.container.destroy());
-		this.playerVisibleReserve.forEach(p => p.cards.forEach(c => c.container.destroy()));
-		this.computerHand.forEach(c => c.container.destroy());
-		this.computerHiddenReserve.forEach(c => c.container.destroy());
-		this.computerVisibleReserve.forEach(p => p.cards.forEach(c => c.container.destroy()));
+		// Helper to create card and add to stage
+		const createAndAddCard = (c: SerializedCard, faceDown: boolean): Card => {
+			const card = this.createCard(c.suit, c.rank, faceDown);
+			this.app.stage.addChild(card.container);
+			return card;
+		};
 
 		// Rebuild cards from state
 		// Deck cards are always face down
-		this.deck = state.deck.map(c => this.deserializeCard(c, true));
+		this.deck = state.deck.map(c => createAndAddCard(c, true));
 
 		// Stack cards are always face up
-		this.stack = state.stack.map(c => this.deserializeCard(c, false));
+		this.stack = state.stack.map(c => createAndAddCard(c, false));
 
 		// Player hand is face up (after initial selection phase)
 		const playerHandFaceDown = state.gamePhase === 'selecting-hidden-reserve';
-		this.playerHand = state.playerHand.map(c => this.deserializeCard(c, playerHandFaceDown));
+		this.playerHand = state.playerHand.map(c => createAndAddCard(c, playerHandFaceDown));
 
 		// Player hidden reserve is face down
-		this.playerHiddenReserve = state.playerHiddenReserve.map(c => this.deserializeCard(c, true));
+		this.playerHiddenReserve = state.playerHiddenReserve.map(c => createAndAddCard(c, true));
 
 		// Player visible reserve is face up
 		this.playerVisibleReserve = state.playerVisibleReserve.map(p => this.deserializePlacement(p, false));
 
 		// Computer hand is always face down from player's perspective
-		this.computerHand = state.computerHand.map(c => this.deserializeCard(c, true));
+		this.computerHand = state.computerHand.map(c => createAndAddCard(c, true));
 
 		// Computer hidden reserve is face down
-		this.computerHiddenReserve = state.computerHiddenReserve.map(c => this.deserializeCard(c, true));
+		this.computerHiddenReserve = state.computerHiddenReserve.map(c => createAndAddCard(c, true));
 
 		// Computer visible reserve is face up
 		this.computerVisibleReserve = state.computerVisibleReserve.map(p => this.deserializePlacement(p, false));
@@ -502,6 +350,9 @@ class CardGame {
 
 		// Update UI based on phase
 		this.updateUIForPhase();
+
+		if (this.gamePhase === 'computer-turn')
+			this.startComputerTurn();
 
 		// Position everything
 		this.positionDeckCards();
@@ -531,7 +382,6 @@ class CardGame {
 				break;
 			case 'computer-turn':
 				this.updateStatus('Computer is thinking...', false);
-				this.startComputerTurn();
 				break;
 			case 'game-over':
 				// Don't change status, it should already show win/lose
@@ -539,47 +389,12 @@ class CardGame {
 		}
 	}
 
-	async init(): Promise<void> {
-		const container = document.getElementById('game-container');
-		if (!container) throw Error('Cannot get game container');
-
-		await this.app.init({
-			background: '#1a472a',
-			resizeTo: container,
-			antialias: true,
-		});
-
-		// Limit event detection to canvas bounds
-		this.app.stage.eventMode = 'static';
-		this.app.stage.hitArea = new Rectangle(0, 0, this.app.screen.width, this.app.screen.height);
-
-		initChat();
-		container.appendChild(this.app.canvas);
-
-		// Don't use handContainer anymore - add all cards directly to stage
-		this.app.stage.addChild(this.deckContainer);
-		this.app.stage.addChild(this.stackContainer);
-
-		// Create UI elements
-		this.createStatusText();
-		this.createDeckDisplay();
-		this.createStackDisplay();
-		this.createPlayButton();
-		this.createScrollArrows();
-
-		this.positionUI();
-
-		// Connect to server - game initialization happens in handleSocketMessage
-		this.socket.addEventListener("open", () => this.handleSocketOpen());
-		this.socket.addEventListener("message", (event) => this.handleSocketMessage(event));
-	}
-
 	private startNewGame(): void {
 		// Initialize deck only for new games
 		this.initializeDeck();
 		this.positionDeckCards();
-
 		this.dealInitialCards();
+		this.updateDeckDisplay();
 
 		// Computer makes hidden reserve selection first
 		for (let i = 0; i < 3; i++) {
@@ -593,7 +408,7 @@ class CardGame {
 
 	private updateStatus(text: string, logToChat: boolean): void {
 		if (logToChat && text != this.statusText.text) {
-			addChatMessage(text, 'system');
+			this.chat.addMessage(text, 'system');
 		}
 
 		this.statusText.text = text;
@@ -733,7 +548,6 @@ class CardGame {
 		});
 		this.statusText.anchor.set(0.5, 0);
 		this.app.stage.addChild(this.statusText);
-		this.positionUI();
 	}
 
 	private createDeckDisplay(): void {
@@ -767,8 +581,6 @@ class CardGame {
 	}
 
 	private createPlayButton(): void {
-		const screenHeight = this.app.screen.height;
-
 		const bg = new Graphics();
 		bg.roundRect(0, 0, 200, 50, 8);
 		bg.fill({ color: 0x3b82f6 });
@@ -805,7 +617,7 @@ class CardGame {
 
 		// Position deck on the right side of center
 		this.deckContainer.x = screenWidth / 2 + 80;
-		this.deckContainer.y = screenHeight / 2 - CARD_HEIGHT / 2;``
+		this.deckContainer.y = screenHeight / 2 - CARD_HEIGHT / 2;
 
 		// Position stack on the left side of center
 		this.stackContainer.x = screenWidth / 2 - CARD_WIDTH - 80;
@@ -835,7 +647,7 @@ class CardGame {
 
 		for (const suit of suits) {
 			for (let rank = 2; rank <= 14; rank++) {
-				const card = this.createCardData(suit, rank, true);
+				const card = this.createCard(suit, rank, true);
 				this.deck.push(card);
 				// Add all cards directly to stage
 				this.app.stage.addChild(card.container);
@@ -847,11 +659,9 @@ class CardGame {
 			const j = Math.floor(Math.random() * (i + 1));
 			[this.deck[i], this.deck[j]] = [this.deck[j], this.deck[i]];
 		}
-
-		this.updateDeckDisplay();
 	}
 
-	private createCardData(suit: 'hearts' | 'diamonds' | 'clubs' | 'spades', rank: number, faceDown = false): Card {
+	private createCard(suit: 'hearts' | 'diamonds' | 'clubs' | 'spades', rank: number, faceDown = false): Card {
 		const container = this.createCardContainer(suit, rank, faceDown);
 		const card: Card = {
 			suit,
@@ -909,7 +719,7 @@ class CardGame {
 
 			const color = SUIT_COLORS[suit];
 			const suitSymbol = SUIT_SYMBOLS[suit];
-			const rankStr = rankToString(rank);
+			const rankStr = this.rankToString(rank);
 
 			// Top-left rank
 			const textStyle = new TextStyle({
@@ -975,9 +785,6 @@ class CardGame {
 
 		// Sort for display
 		this.sortHand(this.playerHand);
-
-		this.positionCards();
-		this.updateDeckDisplay();
 	}
 
 	private handleCardClick(card: Card): void {
@@ -1006,7 +813,7 @@ class CardGame {
 				this.playerHand.push(card);
 				this.flipCardFaceUp(card);
 				this.playerHiddenReserve = this.playerHiddenReserve.filter(c => c !== card);
-				this.updateStatus(`You revealed ${formatCard(card)} from hidden reserve`, true);
+				this.updateStatus(`You revealed ${this.formatCard(card)} from hidden reserve`, true);
 				this.positionCards();
 				this.saveGameState();
 			}
@@ -1153,7 +960,7 @@ class CardGame {
 		if (!placement || !this.canPlayOnStack(placement)) return;
 
 		// Log the play
-		const cardsDescription = formatCards(placement.cards);
+		const cardsDescription = this.formatCards(placement.cards);
 		this.updateStatus(`You played ${cardsDescription}`, true);
 
 		this.playOnStack(placement);
@@ -1228,7 +1035,7 @@ class CardGame {
 				const placement = this.validatePlacement(selectedCards)!;
 
 				// Log the play with specific cards
-				const cardsDescription = formatCards(placement.cards);
+				const cardsDescription = this.formatCards(placement.cards);
 				this.updateStatus(`Computer played ${cardsDescription}`, true);
 
 				this.playOnStack(placement);
@@ -1263,7 +1070,7 @@ class CardGame {
 
 					if (this.canPlayOnStack(placement)) {
 						this.playOnStack(placement);
-						this.updateStatus(`Computer revealed and played ${formatCard(card)} from hidden reserve`, true);
+						this.updateStatus(`Computer revealed and played ${this.formatCard(card)} from hidden reserve`, true);
 
 						// Check for Ace
 						if (card.rank === 14) {
@@ -1281,7 +1088,7 @@ class CardGame {
 						this.flipCardFaceDown(card);
 						this.computerHand.push(card);
 						this.takeStack(this.computerHand);
-						this.updateStatus(`Computer revealed ${formatCard(card)} but couldn't play it - picked up the stack (${stackSize} cards)`, true);
+						this.updateStatus(`Computer revealed ${this.formatCard(card)} but couldn't play it - picked up the stack (${stackSize} cards)`, true);
 					}
 				}
 				break;
@@ -1396,7 +1203,6 @@ class CardGame {
 		while (hand.length < 3 && this.deck.length > 0) {
 			const card = this.deck.pop()!;
 
-			// If this is the player's hand, flip the card face up
 			if (hand === this.playerHand)
 				this.flipCardFaceUp(card);
 
@@ -1673,8 +1479,6 @@ class CardGame {
 }
 
 document.addEventListener("DOMContentLoaded", function() {
-	chatSystem = new Chat();
-
 	const game = new CardGame();
 	game.init().catch(console.error);
 });
