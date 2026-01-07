@@ -1,13 +1,13 @@
-import bcrypt from "bcryptjs";
-import { DurableObject } from "cloudflare:workers";
-import {loginPageHtml} from "./page_templates";
+import bcrypt from 'bcryptjs';
+import { DurableObject } from 'cloudflare:workers';
+import {loginPageHtml} from './page_templates';
 
 export interface Env {
-	KV: KVNamespace;
-	SKIP_AUTH: boolean;
+	AI: Ai;
 	ASSETS: Fetcher;
 	GAME_DATA_SERVER: DurableObjectNamespace<GameDataServer>;
-	AI: Ai;
+	KV: KVNamespace;
+	SKIP_AUTH: boolean;
 }
 
 // Serializable card representation (without PixiJS container)
@@ -56,7 +56,7 @@ function getSessionFromCookie(request: Request): string | null {
 	return match ? match[1] : null;
 }
 
-// Check if user is authenticated
+// Check if the user is authenticated
 async function isAuthenticated(request: Request, env: Env): Promise<boolean> {
 	const sessionToken = getSessionFromCookie(request);
 	if (!sessionToken) return false;
@@ -66,7 +66,7 @@ async function isAuthenticated(request: Request, env: Env): Promise<boolean> {
 }
 
 export default {
-	async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+	async fetch(request: Request, env: Env): Promise<Response> {
 		const url = new URL(request.url);
 		const pathname = url.pathname;
 
@@ -91,7 +91,7 @@ export default {
 				const username = formData.get('username');
 				const password = formData.get('password');
 
-				if (typeof username != "string" || typeof password != "string") {
+				if (typeof username != 'string' || typeof password != 'string') {
 					const html = loginPageHtml.replace(
 						'{{ERROR_MESSAGE}}',
 						'<div class="error">Please enter both username and password</div>'
@@ -106,7 +106,7 @@ export default {
 				const storedHash = await env.KV.get(`user:${username}`);
 
 				// Always compute the hash to avoid username existence oracle. Content time enough?
-				const salt = storedHash ? bcrypt.getSalt(storedHash) : "$2b$12$8vffttySwDuJ/ZhtNbSV/e";
+				const salt = storedHash ? bcrypt.getSalt(storedHash) : '$2b$12$8vffttySwDuJ/ZhtNbSV/e';
 				const inputHash = bcrypt.hashSync(password, salt);
 
 				if (storedHash !== inputHash) {
@@ -182,8 +182,8 @@ export default {
 				});
 			}
 
-			let id = env.GAME_DATA_SERVER.idFromName(`${username}`);
-			let gameDataServer = env.GAME_DATA_SERVER.get(id);
+			const id = env.GAME_DATA_SERVER.idFromName(`${username}`);
+			const gameDataServer = env.GAME_DATA_SERVER.get(id);
 
 			return gameDataServer.fetch(request);
 		}
@@ -200,7 +200,7 @@ export class GameDataServer extends DurableObject {
 		super(ctx, env);
 	}
 
-	async fetch(request: Request): Promise<Response> {
+	async fetch(_request: Request): Promise<Response> {
 		if (this.connected) return new Response('Already connected', { status: 400 });
 
 		const webSocketPair = new WebSocketPair();
@@ -215,12 +215,12 @@ export class GameDataServer extends DurableObject {
 	}
 
 	private validatePlacement(cards: SerializedCard[]): string {
-		if (cards.length === 0) return "it is empty";
-		if (cards.length === 1) return "valid";
+		if (cards.length === 0) return 'it is empty';
+		if (cards.length === 1) return 'valid';
 
 		// Check for same rank
 		const allSameRank = cards.every(c => c.rank === cards[0].rank);
-		if (allSameRank) return "valid";
+		if (allSameRank) return 'valid';
 
 		// Check for straight (3+)
 		if (cards.length >= 3) {
@@ -232,10 +232,10 @@ export class GameDataServer extends DurableObject {
 					break;
 				}
 			}
-			if (isStraight) return "valid";
+			if (isStraight) return 'valid';
 		}
 
-		return "is not a straight or multiple of a kind";
+		return 'is not a straight or multiple of a kind';
 	}
 
 	// Validate AI response matches the expected JSON schema exactly
@@ -334,7 +334,7 @@ export class GameDataServer extends DurableObject {
 				let attempts = 0;
 				let response: ResponsesOutput;
 				let parsedResponse: { action: string; indexes?: number[]; whyMoveIsValid: string } | null = null;
-				let lastError: string = '';
+				let lastError = '';
 
 				const instructions = `You are playing a card game called Charlotte's Misfits. You need to win. The rules are as follows: ${RULES}`;
 
@@ -342,52 +342,50 @@ export class GameDataServer extends DurableObject {
 					{
 						role: 'user',
 						content: `Current game state:
-- Your hand: ${JSON.stringify(this.state?.computerHand)}
-- Your opponent's hand size: ${this.state?.playerHand.length}
-- The stack: ${JSON.stringify(this.state?.stack)}
-- Your visible reserve: ${JSON.stringify(this.state?.computerVisibleReserve)}
-- Your opponent's visible reserve: ${JSON.stringify(this.state?.playerVisibleReserve)}
-- Your hidden reserve size: ${this.state?.computerHiddenReserve.length}
-- Your opponent's hidden reserve size: ${this.state?.playerHiddenReserve.length}
+								  - Your hand: ${JSON.stringify(this.state?.computerHand)}
+								  - Your opponent's hand size: ${this.state?.playerHand.length}
+								  - The stack: ${JSON.stringify(this.state?.stack)}
+								  - Your visible reserve: ${JSON.stringify(this.state?.computerVisibleReserve)}
+								  - Your opponent's visible reserve: ${JSON.stringify(this.state?.playerVisibleReserve)}
+								  - Your hidden reserve size: ${this.state?.computerHiddenReserve.length}
+								  - Your opponent's hidden reserve size: ${this.state?.playerHiddenReserve.length}
 
-To play a card, use the "play" action and include the index(es) of the card(s) in your hand to play, starting at 0. To pick up the stack, use the "stack" action. To pick up a hidden card, use the "hidden" action with an index 0-2.
+								  To play a card, use the "play" action and include the index(es) of the card(s) in your hand to play, starting at 0. To pick up the stack, use the "stack" action. To pick up a hidden card, use the "hidden" action with an index 0-2.
 
-What is your move?`
+								  What is your move?`
 					}
 				];
 
-				while (attempts < MAX_RETRIES) {
-					attempts++;
-
+				while (attempts++ < MAX_RETRIES) {
 					try {
-						response = await this.env.AI.run("@cf/openai/gpt-oss-120b", {
+						response = await this.env.AI.run('@cf/openai/gpt-oss-120b', {
 							instructions,
 							input,
 							text: {
 								format: {
-									type: "json_schema",
-									name: "game_action",
+									type: 'json_schema',
+									name: 'game_action',
 									strict: true,
 									schema: {
-										type: "object",
+										type: 'object',
 										properties: {
 											action: {
-												type: "string",
-												enum: ["play", "stack", "hidden"],
+												type: 'string',
+												enum: ['play', 'stack', 'hidden'],
 											},
 											indexes: {
-												type: "array",
+												type: 'array',
 												items: {
-													type: "number"
+													type: 'number'
 												}
 											},
 											whyMoveIsValid: {
-												type: "string"
+												type: 'string'
 											}
 										},
 										required: [
-											"action",
-											"whyMoveIsValid"
+											'action',
+											'whyMoveIsValid'
 										],
 										additionalProperties: false
 									}
@@ -395,10 +393,8 @@ What is your move?`
 							}
 						});
 
-						console.log('HAND');
-						console.log(this.state?.computerHand);
-						console.log('STACK');
-						console.log(this.state?.stack);
+						console.log('HAND', this.state?.computerHand);
+						console.log('STACK', this.state?.stack);
 
 						// Extract text from response - output_text should contain the structured JSON
 						let outputText = response.output_text;
@@ -441,12 +437,12 @@ What is your move?`
 						}
 
 						// Validate the action is legal for current game state
-						if (parsedResponse!.action === "play") {
+						if (parsedResponse!.action === 'play') {
 							const valid = this.validatePlacement(
-								this.state?.computerHand.filter((card, index) => parsedResponse!.indexes?.includes(index)) ?? []
+								this.state?.computerHand.filter((_card, index) => parsedResponse!.indexes?.includes(index)) ?? []
 							);
 
-							if (valid === "valid") {
+							if (valid === 'valid') {
 								break; // Success!
 							} else {
 								// Add assistant's invalid response, then user feedback
@@ -462,7 +458,7 @@ What is your move?`
 								console.log(`Attempt ${attempts}/${MAX_RETRIES}: ${lastError}`);
 								// Don't continue - let the loop retry with the updated input
 							}
-						} else if (parsedResponse!.action === "hidden") {
+						} else if (parsedResponse!.action === 'hidden') {
 							if ((this.state?.computerHand.length ?? 0) > 0) {
 								// Add assistant's invalid response, then user feedback
 								input.push({
@@ -475,12 +471,11 @@ What is your move?`
 								});
 								lastError = 'Tried to draw from hidden reserve with cards in hand';
 								console.log(`Attempt ${attempts}/${MAX_RETRIES}: ${lastError}`);
-								// Don't continue - let the loop retry with the updated input
 							} else {
 								break; // Success!
 							}
 						} else {
-							// "stack" action - always valid
+							// 'stack' action - always valid
 							break; // Success!
 						}
 					} catch (e) {
@@ -500,7 +495,8 @@ What is your move?`
 					break;
 				}
 
-				console.log("ACTION ", parsedResponse);
+				console.log('ACTION ', parsedResponse);
+				console.log('==============================');
 
 				ws.send(JSON.stringify({type: 'action-res', action: parsedResponse}));
 				break;
@@ -511,10 +507,8 @@ What is your move?`
 	async webSocketClose(
 		ws: WebSocket,
 		code: number,
-		reason: string,
-		wasClean: boolean,
 	) {
-		ws.close(code, "Durable Object is closing WebSocket");
+		ws.close(code, 'Durable Object is closing WebSocket');
 	}
 }
 
