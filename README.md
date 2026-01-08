@@ -10,3 +10,6 @@ After installing NPM, esbuild, and Wrangler, run `npm run dev` to start the serv
 
 # AI Features
 The computer player's actions are controlled by GPT-OSS 120b. The chat is also connected got GPT-OSS, allowing you to ask for advice or ask questions about the rules of the game. The AI chat can see your hand and the other visible game state on screen.
+
+# Known issues
+Vertical displays are not supported. Small displays may not work well. The game was designed around a monitor form factor. Your millage may vary otherwise.
