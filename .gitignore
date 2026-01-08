@@ -166,3 +166,5 @@ dist/admin.js
 .env*
 !.env.example
 .wrangler/
+
+.vscode/
