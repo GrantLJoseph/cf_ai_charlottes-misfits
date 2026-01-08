@@ -234,3 +234,6 @@ Most of the game graphics do not scale with screen size. The cards, for example,
 
 # 60
 The text isn't scaling with screen size. It makes the numbers/letters on the backs of cards too large.
+
+# 61
+The play button isn't scaling in size or position. Neither is the status text.

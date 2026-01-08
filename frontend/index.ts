@@ -69,6 +69,11 @@ const BASE_HITBOX_SIZE = 60;
 const BASE_FONT_SIZE_RANK = 28;
 const BASE_FONT_SIZE_SUIT_SMALL = 20;
 const BASE_FONT_SIZE_SUIT_CENTER = 56;
+const BASE_FONT_SIZE_STATUS = 36;
+const BASE_FONT_SIZE_UI = 20;
+const BASE_BUTTON_WIDTH = 300;
+const BASE_BUTTON_HEIGHT = 75;
+const BASE_BUTTON_OFFSET_Y = 200;
 
 // Ratios (don't scale)
 const UNSELECTED_VISIBLE = 0.5;
@@ -146,6 +151,11 @@ class CardGame {
 	private get fontSizeRank(): number { return BASE_FONT_SIZE_RANK * this.scale; }
 	private get fontSizeSuitSmall(): number { return BASE_FONT_SIZE_SUIT_SMALL * this.scale; }
 	private get fontSizeSuitCenter(): number { return BASE_FONT_SIZE_SUIT_CENTER * this.scale; }
+	private get fontSizeStatus(): number { return BASE_FONT_SIZE_STATUS * this.scale; }
+	private get fontSizeUI(): number { return BASE_FONT_SIZE_UI * this.scale; }
+	private get buttonWidth(): number { return BASE_BUTTON_WIDTH * this.scale; }
+	private get buttonHeight(): number { return BASE_BUTTON_HEIGHT * this.scale; }
+	private get buttonOffsetY(): number { return BASE_BUTTON_OFFSET_Y * this.scale; }
 
 	// Calculate scale factor based on screen size
 	private calculateScale(): void {
@@ -383,13 +393,15 @@ class CardGame {
 		// Update hitArea to match new canvas size
 		this.app.stage.hitArea = new Rectangle(0, 0, this.app.screen.width, this.app.screen.height);
 
-		// Recalculate scale and redraw cards if scale changed
+		// Recalculate scale and redraw UI if scale changed
 		const oldScale = this.scale;
 		this.calculateScale();
 		if (Math.abs(this.scale - oldScale) > 0.001) {
 			this.redrawAllCards();
 			this.updateDeckDisplay();
 			this.updateStackDisplay();
+			this.updateStatusTextStyle();
+			this.rebuildPlayButton();
 		}
 
 		this.positionUI();
@@ -741,13 +753,17 @@ class CardGame {
 			text: 'Select 3 cards for your hidden reserve (0/3)',
 			style: new TextStyle({
 				fontFamily: 'Arial, sans-serif',
-				fontSize: 24,
+				fontSize: this.fontSizeStatus,
 				fill: '#ffffff',
 				align: 'center'
 			})
 		});
 		this.statusText.anchor.set(0.5, 0);
 		this.app.stage.addChild(this.statusText);
+	}
+
+	private updateStatusTextStyle(): void {
+		this.statusText.style.fontSize = this.fontSizeStatus;
 	}
 
 	private createDeckDisplay(): void {
@@ -781,23 +797,7 @@ class CardGame {
 	}
 
 	private createPlayButton(): void {
-		const bg = new Graphics();
-		bg.roundRect(0, 0, 200, 50, 8);
-		bg.fill({ color: 0x3b82f6 });
-		this.playButton.addChild(bg);
-
-		const text = new Text({
-			text: 'Play Cards',
-			style: new TextStyle({
-				fontFamily: 'Arial, sans-serif',
-				fontSize: 20,
-				fill: '#ffffff'
-			})
-		});
-		text.anchor.set(0.5);
-		text.x = 100;
-		text.y = 25;
-		this.playButton.addChild(text);
+		this.rebuildPlayButton();
 
 		this.playButton.eventMode = 'static';
 		this.playButton.cursor = 'pointer';
@@ -806,6 +806,31 @@ class CardGame {
 		this.playButton.on('pointerdown', () => this.handlePlayButton());
 
 		this.app.stage.addChild(this.playButton);
+	}
+
+	private rebuildPlayButton(): void {
+		const wasVisible = this.playButton.visible;
+		this.playButton.removeChildren();
+
+		const bg = new Graphics();
+		bg.roundRect(0, 0, this.buttonWidth, this.buttonHeight, 8 * this.scale);
+		bg.fill({ color: 0x3b82f6 });
+		this.playButton.addChild(bg);
+
+		const text = new Text({
+			text: 'Play Cards',
+			style: new TextStyle({
+				fontFamily: 'Arial, sans-serif',
+				fontSize: this.fontSizeUI,
+				fill: '#ffffff'
+			})
+		});
+		text.anchor.set(0.5);
+		text.x = this.buttonWidth / 2;
+		text.y = this.buttonHeight / 2;
+		this.playButton.addChild(text);
+
+		this.playButton.visible = wasVisible;
 	}
 
 	private positionUI(): void {
@@ -823,8 +848,8 @@ class CardGame {
 		this.stackContainer.x = screenWidth / 2 - this.cardWidth - 80;
 		this.stackContainer.y = screenHeight / 2 - this.cardHeight / 2;
 
-		this.playButton.x = screenWidth / 2 - 100;
-		this.playButton.y = screenHeight / 2 + 200;
+		this.playButton.x = screenWidth / 2 - this.buttonWidth / 2;
+		this.playButton.y = screenHeight / 2 + this.buttonOffsetY;
 
 		// Player reserves: to the right of the deck
 		const rightGapSize = screenWidth - (this.deckContainer.x + this.cardWidth);
